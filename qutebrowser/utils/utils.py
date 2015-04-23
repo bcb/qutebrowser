@@ -95,7 +95,7 @@ def read_file(filename, binary=False):
 def actute_warning():
     """Display a warning about the dead_actute issue if needed."""
     # WORKAROUND (remove this when we bump the requirements to 5.3.0)
-    # Non linux OS' aren't affected
+    # Non Linux OS' aren't affected
     if not sys.platform.startswith('linux'):
         return
     # If no compose file exists for some reason, we're not affected
@@ -120,7 +120,7 @@ def actute_warning():
                           "for details.")
                     break
     except OSError:
-        log.misc.exception("Failed to read Compose file")
+        log.init.exception("Failed to read Compose file")
 
 
 def _get_color_percentage(a_c1, a_c2, a_c3, b_c1, b_c2, b_c3, percent):
@@ -151,7 +151,7 @@ def interpolate_color(start, end, percent, colorspace=QColor.Rgb):
         start: The start color.
         end: The end color.
         percent: Which value to get (0 - 100)
-        colorspace: The desired interpolation colorsystem,
+        colorspace: The desired interpolation color system,
                     QColor::{Rgb,Hsv,Hsl} (from QColor::Spec enum)
 
     Return:
@@ -362,17 +362,18 @@ def normalize_keystr(keystr):
     Return:
         The normalized keystring.
     """
+    keystr = keystr.lower()
     replacements = (
-        ('Control', 'Ctrl'),
-        ('Windows', 'Meta'),
-        ('Mod1', 'Alt'),
-        ('Mod4', 'Meta'),
+        ('control', 'ctrl'),
+        ('windows', 'meta'),
+        ('mod1', 'alt'),
+        ('mod4', 'meta'),
     )
     for (orig, repl) in replacements:
         keystr = keystr.replace(orig, repl)
-    for mod in ('Ctrl', 'Meta', 'Alt', 'Shift'):
+    for mod in ('ctrl', 'meta', 'alt', 'shift'):
         keystr = keystr.replace(mod + '-', mod + '+')
-    return keystr.lower()
+    return keystr
 
 
 class FakeIOStream(io.TextIOBase):
@@ -435,7 +436,7 @@ class prevent_exceptions:  # pylint: disable=invalid-name
     silently ignores them.
 
     We used to re-raise the exception with a single-shot QTimer in a similar
-    case, but that lead to a strange proble with a KeyError with some random
+    case, but that lead to a strange problem with a KeyError with some random
     jinja template stuff as content. For now, we only log it, so it doesn't
     pass 100% silently.
 

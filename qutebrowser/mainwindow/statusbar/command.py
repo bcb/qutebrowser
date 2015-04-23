@@ -39,10 +39,6 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
     Signals:
         got_cmd: Emitted when a command is triggered by the user.
                  arg: The command string.
-        got_search: Emitted when the user started a new search.
-                    arg: The search term.
-        got_rev_search: Emitted when the user started a new reverse search.
-                        arg: The search term.
         clear_completion_selection: Emitted before the completion widget is
                                     hidden.
         hide_completion: Emitted when the completion widget should be hidden.
@@ -52,8 +48,6 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
     """
 
     got_cmd = pyqtSignal(str)
-    got_search = pyqtSignal(str)
-    got_search_rev = pyqtSignal(str)
     clear_completion_selection = pyqtSignal()
     hide_completion = pyqtSignal()
     update_completion = pyqtSignal()
@@ -98,7 +92,7 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
 
     @cmdutils.register(instance='status-command', name='set-cmd-text',
                        scope='window', maxsplit=0)
-    def set_cmd_text_command(self, text):
+    def set_cmd_text_command(self, text, space=False):
         """Preset the statusbar to some text.
 
         //
@@ -108,6 +102,7 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
 
         Args:
             text: The commandline to set.
+            space: If given, a space is added to the end.
         """
         tabbed_browser = objreg.get('tabbed-browser', scope='window',
                                     window=self._win_id)
@@ -127,7 +122,9 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
             # I'm not sure what's the best thing to do here
             # https://github.com/The-Compiler/qutebrowser/issues/123
             text = text.replace('{url}', url)
-        if not text[0] in modeparsers.STARTCHARS:
+        if space:
+            text += ' '
+        if not text or text[0] not in modeparsers.STARTCHARS:
             raise cmdexc.CommandError(
                 "Invalid command text '{}'.".format(text))
         self.set_cmd_text(text)
@@ -164,22 +161,21 @@ class Command(misc.MinimalLineEditMixin, misc.CommandLineEdit):
                        modes=[usertypes.KeyMode.command], scope='window')
     def command_accept(self):
         """Execute the command currently in the commandline."""
-        signals = {
-            ':': self.got_cmd,
-            '/': self.got_search,
-            '?': self.got_search_rev,
+        prefixes = {
+            ':': '',
+            '/': 'search ',
+            '?': 'search -r ',
         }
         text = self.text()
         self.history.append(text)
         modeman.leave(self._win_id, usertypes.KeyMode.command, 'cmd accept')
-        if text[0] in signals:
-            signals[text[0]].emit(text[1:])
+        self.got_cmd.emit(prefixes[text[0]] + text[1:])
 
     @pyqtSlot(usertypes.KeyMode)
     def on_mode_left(self, mode):
         """Clear up when command mode was left.
 
-        - Clear the statusbar text if it's explicitely unfocused.
+        - Clear the statusbar text if it's explicitly unfocused.
         - Clear completion selection
         - Hide completion
 

@@ -52,7 +52,7 @@ class WebView(QWebView):
         hintmanager: The HintManager instance for this view.
         progress: loading progress of this page.
         scroll_pos: The current scroll position as (x%, y%) tuple.
-        statusbar_message: The current javscript statusbar message.
+        statusbar_message: The current javascript statusbar message.
         inspector: The QWebInspector used for this webview.
         load_status: loading status of this page (index into LoadStatus)
         viewing_source: Whether the webview is currently displaying source
@@ -62,8 +62,10 @@ class WebView(QWebView):
         registry: The ObjectRegistry associated with this tab.
         tab_id: The tab ID of the view.
         win_id: The window ID of the view.
+        search_text: The text of the last search.
+        search_flags: The search flags of the last search.
         _cur_url: The current URL (accessed via cur_url property).
-        _has_ssl_errors: Whether SSL errors occured during loading.
+        _has_ssl_errors: Whether SSL errors occurred during loading.
         _zoom: A NeighborList with the zoom levels.
         _old_scroll_pos: The old scroll position.
         _check_insertmode: If True, in mouseReleaseEvent we should check if we
@@ -102,6 +104,8 @@ class WebView(QWebView):
         self._zoom = None
         self._has_ssl_errors = False
         self.keep_icon = False
+        self.search_text = None
+        self.search_flags = 0
         self.init_neighborlist()
         cfg = objreg.get('config')
         cfg.changed.connect(self.init_neighborlist)
@@ -119,8 +123,7 @@ class WebView(QWebView):
                                   window=win_id)
         tab_registry[self.tab_id] = self
         objreg.register('webview', self, registry=self.registry)
-        page = webpage.BrowserPage(win_id, self.tab_id, self)
-        self.setPage(page)
+        page = self._init_page()
         hintmanager = hints.HintManager(win_id, self.tab_id, self)
         hintmanager.mouse_event.connect(self.on_mouse_event)
         hintmanager.start_hinting.connect(page.on_start_hinting)
@@ -130,21 +133,27 @@ class WebView(QWebView):
                                   window=win_id)
         mode_manager.entered.connect(self.on_mode_entered)
         mode_manager.left.connect(self.on_mode_left)
-        page.linkHovered.connect(self.linkHovered)
-        page.mainFrame().loadStarted.connect(self.on_load_started)
-        self.urlChanged.connect(self.on_url_changed)
-        page.mainFrame().loadFinished.connect(self.on_load_finished)
-        self.loadProgress.connect(lambda p: setattr(self, 'progress', p))
-        self.page().statusBarMessage.connect(
-            lambda msg: setattr(self, 'statusbar_message', msg))
-        self.page().networkAccessManager().sslErrors.connect(
-            lambda *args: setattr(self, '_has_ssl_errors', True))
         self.viewing_source = False
         self.setZoomFactor(float(config.get('ui', 'default-zoom')) / 100)
         self._default_zoom_changed = False
-        objreg.get('config').changed.connect(self.on_config_changed)
         if config.get('input', 'rocker-gestures'):
             self.setContextMenuPolicy(Qt.PreventContextMenu)
+        self.urlChanged.connect(self.on_url_changed)
+        self.loadProgress.connect(lambda p: setattr(self, 'progress', p))
+        objreg.get('config').changed.connect(self.on_config_changed)
+
+    def _init_page(self):
+        """Initialize the QWebPage used by this view."""
+        page = webpage.BrowserPage(self.win_id, self.tab_id, self)
+        self.setPage(page)
+        page.linkHovered.connect(self.linkHovered)
+        page.mainFrame().loadStarted.connect(self.on_load_started)
+        page.mainFrame().loadFinished.connect(self.on_load_finished)
+        page.statusBarMessage.connect(
+            lambda msg: setattr(self, 'statusbar_message', msg))
+        page.networkAccessManager().sslErrors.connect(
+            lambda *args: setattr(self, '_has_ssl_errors', True))
+        return page
 
     def __repr__(self):
         url = utils.elide(self.url().toDisplayString(), 50)
@@ -234,7 +243,7 @@ class WebView(QWebView):
         # me, but it works this way.
         hitresult = frame.hitTestContent(pos)
         if hitresult.isNull():
-            # For some reason, the whole hitresult can be null sometimes (e.g.
+            # For some reason, the whole hit result can be null sometimes (e.g.
             # on doodle menu links). If this is the case, we schedule a check
             # later (in mouseReleaseEvent) which uses webelem.focus_elem.
             log.mouse.debug("Hitresult is null!")
@@ -243,7 +252,7 @@ class WebView(QWebView):
         try:
             elem = webelem.WebElementWrapper(hitresult.element())
         except webelem.IsNullError:
-            # For some reason, the hitresult element can be a null element
+            # For some reason, the hit result element can be a null element
             # sometimes (e.g. when clicking the timetable fields on
             # http://www.sbb.ch/ ). If this is the case, we schedule a check
             # later (in mouseReleaseEvent) which uses webelem.focus_elem.
@@ -372,7 +381,7 @@ class WebView(QWebView):
 
     @pyqtSlot('QMouseEvent')
     def on_mouse_event(self, evt):
-        """Post a new mouseevent from a hintmanager."""
+        """Post a new mouse event from a hintmanager."""
         log.modes.debug("Hint triggered, focusing {!r}".format(self))
         self.setFocus()
         QApplication.postEvent(self, evt)
@@ -393,7 +402,7 @@ class WebView(QWebView):
         true when the QWebPage has an ErrorPageExtension implemented.
         See https://github.com/The-Compiler/qutebrowser/issues/84
         """
-        ok = not self.page().error_occured
+        ok = not self.page().error_occurred
         if ok and not self._has_ssl_errors:
             self._set_load_status(LoadStatus.success)
         elif ok:
@@ -435,6 +444,35 @@ class WebView(QWebView):
             log.webview.debug("Restoring focus policy because mode {} was "
                               "left.".format(mode))
         self.setFocusPolicy(Qt.WheelFocus)
+
+    def search(self, text, flags):
+        """Search for text in the current page.
+
+        Args:
+            text: The text to search for.
+            flags: The QWebPage::FindFlags.
+        """
+        log.webview.debug("Searching with text '{}' and flags "
+                          "0x{:04x}.".format(text, int(flags)))
+        old_scroll_pos = self.scroll_pos
+        flags = QWebPage.FindFlags(flags)
+        found = self.findText(text, flags)
+        if not found and not flags & QWebPage.HighlightAllOccurrences and text:
+            message.error(self.win_id, "Text '{}' not found on "
+                          "page!".format(text), immediately=True)
+        else:
+            backward = int(flags) & QWebPage.FindBackward
+
+            def check_scroll_pos():
+                """Check if the scroll position got smaller and show info."""
+                if not backward and self.scroll_pos < old_scroll_pos:
+                    message.info(self.win_id, "Search hit BOTTOM, continuing "
+                                 "at TOP", immediately=True)
+                elif backward and self.scroll_pos > old_scroll_pos:
+                    message.info(self.win_id, "Search hit TOP, continuing at "
+                                 "BOTTOM", immediately=True)
+            # We first want QWebPage to refresh.
+            QTimer.singleShot(0, check_scroll_pos)
 
     def createWindow(self, wintype):
         """Called by Qt when a page wants to create a new window.
@@ -527,3 +565,23 @@ class WebView(QWebView):
         menu = self.page().createStandardContextMenu()
         self.shutting_down.connect(menu.close)
         menu.exec_(e.globalPos())
+
+    def wheelEvent(self, e):
+        """Zoom on Ctrl-Mousewheel.
+
+        Args:
+            e: The QWheelEvent.
+        """
+        if e.modifiers() & Qt.ControlModifier:
+            e.accept()
+            divider = config.get('input', 'mouse-zoom-divider')
+            factor = self.zoomFactor() + e.angleDelta().y() / divider
+            if factor < 0:
+                return
+            perc = int(100 * factor)
+            message.info(self.win_id, "Zoom level: {}%".format(perc))
+            self._zoom.fuzzyval = perc
+            self.setZoomFactor(factor)
+            self._default_zoom_changed = True
+        else:
+            super().wheelEvent(e)

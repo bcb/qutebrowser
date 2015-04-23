@@ -148,7 +148,7 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
         do_search: Whether to perform a search on non-URLs.
 
     Return:
-        A target QUrl to a searchpage or the original URL.
+        A target QUrl to a search page or the original URL.
     """
     expanded = os.path.expanduser(urlstr)
     if relative and cwd:
@@ -183,7 +183,7 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
         qtutils.ensure_valid(url)
     else:
         if not url.isValid():
-            raise FuzzyUrlError("Invalid URL '{}'!".format(urlstr))
+            raise FuzzyUrlError("Invalid URL '{}'!".format(urlstr), url)
     return url
 
 
@@ -357,6 +357,20 @@ def host_tuple(url):
 
 class FuzzyUrlError(Exception):
 
-    """Exception raised by fuzzy_url on problems."""
+    """Exception raised by fuzzy_url on problems.
 
-    pass
+    Attributes:
+        url: The QUrl which caused the error.
+    """
+
+    def __init__(self, msg, url=None):
+        super().__init__(msg)
+        if url is not None:
+            assert not url.isValid()
+        self.url = url
+
+    def __str__(self):
+        if self.url is None or not self.url.errorString():
+            return str(super())
+        else:
+            return '{}: {}'.format(str(super()), self.url.errorString())

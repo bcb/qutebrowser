@@ -43,7 +43,7 @@ class MainWindow(QWidget):
 
     """The main window of qutebrowser.
 
-    Adds all needed components to a vbox, initializes subwidgets and connects
+    Adds all needed components to a vbox, initializes sub-widgets and connects
     signals.
 
     Attributes:
@@ -84,7 +84,7 @@ class MainWindow(QWidget):
             self._load_state_geometry()
         else:
             self._set_default_geometry()
-        log.init.debug("Initial mainwindow geometry: {}".format(
+        log.init.debug("Initial main window geometry: {}".format(
             self.geometry()))
         self._vbox = QVBoxLayout(self)
         self._vbox.setContentsMargins(0, 0, 0, 0)
@@ -96,28 +96,22 @@ class MainWindow(QWidget):
                         window=self.win_id)
 
         self._downloadview = downloadview.DownloadView(self.win_id)
-        self._vbox.addWidget(self._downloadview)
-        self._downloadview.show()
 
         self._tabbed_browser = tabbedbrowser.TabbedBrowser(self.win_id)
         objreg.register('tabbed-browser', self._tabbed_browser, scope='window',
                         window=self.win_id)
-        self._vbox.addWidget(self._tabbed_browser)
 
         # We need to set an explicit parent for StatusBar because it does some
         # show/hide magic immediately which would mean it'd show up as a
         # window.
         self.status = bar.StatusBar(self.win_id, parent=self)
-        self._vbox.addWidget(self.status)
+
+        self._add_widgets()
+        self._downloadview.show()
 
         self._completion = completionwidget.CompletionView(self.win_id, self)
 
         self._commandrunner = runners.CommandRunner(self.win_id)
-
-        log.init.debug("Initializing search...")
-        search_runner = runners.SearchRunner(self)
-        objreg.register('search-runner', search_runner, scope='window',
-                        window=self.win_id)
 
         log.init.debug("Initializing modes...")
         modeman.init(self.win_id, self)
@@ -129,6 +123,10 @@ class MainWindow(QWidget):
         # we defer this until everything else is initialized.
         QTimer.singleShot(0, self._connect_resize_completion)
         objreg.get('config').changed.connect(self.on_config_changed)
+
+        if config.get('ui', 'hide-mouse-cursor'):
+            self.setCursor(Qt.BlankCursor)
+
         #self.retranslateUi(MainWindow)
         #self.tabWidget.setCurrentIndex(0)
         #QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -141,6 +139,24 @@ class MainWindow(QWidget):
         """Resize the completion if related config options changed."""
         if section == 'completion' and option in ('height', 'shrink'):
             self.resize_completion()
+        elif section == 'ui' and option == 'downloads-position':
+            self._add_widgets()
+
+    def _add_widgets(self):
+        """Add or readd all widgets to the VBox."""
+        self._vbox.removeWidget(self._tabbed_browser)
+        self._vbox.removeWidget(self._downloadview)
+        self._vbox.removeWidget(self.status)
+        position = config.get('ui', 'downloads-position')
+        if position == 'north':
+            self._vbox.addWidget(self._downloadview)
+            self._vbox.addWidget(self._tabbed_browser)
+        elif position == 'south':
+            self._vbox.addWidget(self._tabbed_browser)
+            self._vbox.addWidget(self._downloadview)
+        else:
+            raise ValueError("Invalid position {}!".format(position))
+        self._vbox.addWidget(self.status)
 
     def _load_state_geometry(self):
         """Load the geometry from the state file."""
@@ -191,7 +207,6 @@ class MainWindow(QWidget):
         completion_obj = self._get_object('completion')
         tabs = self._get_object('tabbed-browser')
         cmd = self._get_object('status-command')
-        search_runner = self._get_object('search-runner')
         message_bridge = self._get_object('message-bridge')
         mode_manager = self._get_object('mode-manager')
         prompter = self._get_object('prompter')
@@ -210,10 +225,7 @@ class MainWindow(QWidget):
         keyparsers[usertypes.KeyMode.normal].keystring_updated.connect(
             status.keystring.setText)
         cmd.got_cmd.connect(self._commandrunner.run_safely)
-        cmd.got_search.connect(search_runner.search)
-        cmd.got_search_rev.connect(search_runner.search_rev)
         cmd.returnPressed.connect(tabs.on_cmd_return_pressed)
-        search_runner.do_search.connect(tabs.search)
         tabs.got_cmd.connect(self._commandrunner.run_safely)
 
         # config
@@ -241,6 +253,8 @@ class MainWindow(QWidget):
 
         tabs.current_tab_changed.connect(status.percentage.on_tab_changed)
         tabs.cur_scroll_perc_changed.connect(status.percentage.set_perc)
+
+        tabs.tab_index_changed.connect(status.tabindex.on_tab_index_changed)
 
         tabs.current_tab_changed.connect(status.txt.on_tab_changed)
         tabs.cur_statusbar_message.connect(status.txt.on_statusbar_message)

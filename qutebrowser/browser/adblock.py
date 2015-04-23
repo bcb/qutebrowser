@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Functions related to adblocking."""
+"""Functions related to ad blocking."""
 
 import io
 import os.path
@@ -108,8 +108,8 @@ class HostBlocker:
                 message.info('current',
                              "Run :adblock-update to get adblock lists.")
 
-    @cmdutils.register(instance='host-blocker')
-    def adblock_update(self, win_id: {'special': 'win_id'}):
+    @cmdutils.register(instance='host-blocker', win_id='win_id')
+    def adblock_update(self, win_id):
         """Update the adblock block lists."""
         self.blocked_hosts = set()
         self._done_count = 0

@@ -34,7 +34,7 @@ See the https://github.com/The-Compiler/qutebrowser/releases[github releases
 page] for available downloads (currently a source archive, and standalone
 packages as well as MSI installers for Windows).
 
-See link:doc/INSTALL.asciidoc[INSTALL] for detailed instructions on how to get
+See link:INSTALL.asciidoc[INSTALL] for detailed instructions on how to get
 qutebrowser running for various platforms.
 
 Documentation
@@ -43,12 +43,13 @@ Documentation
 In addition to the topics mentioned in this README, the following documents are
 available:
 
-* A http://qutebrowser.org/img/cheatsheet-big.png[keybinding cheatsheet]: +
-image:http://qutebrowser.org/img/cheatsheet-small.png["qutebrowser keybinding cheatsheet",link="http://qutebrowser.org/img/cheatsheet-big.png"]
+* A http://qutebrowser.org/img/cheatsheet-big.png[key binding cheatsheet]: +
+image:http://qutebrowser.org/img/cheatsheet-small.png["qutebrowser key binding cheatsheet",link="http://qutebrowser.org/img/cheatsheet-big.png"]
 * link:doc/quickstart.asciidoc[Quick start guide]
-* link:doc/FAQ.asciidoc[Frequently asked questions]
+* link:FAQ.asciidoc[Frequently asked questions]
 * link:CONTRIBUTING.asciidoc[Contributing to qutebrowser]
-* link:doc/INSTALL.asciidoc[INSTALL]
+* link:INSTALL.asciidoc[INSTALL]
+* link:CHANGELOG.asciidoc[Change Log]
 * link:doc/stacktrace.asciidoc[Reporting segfaults]
 * link:doc/userscripts.asciidoc[How to write userscripts]
 
@@ -91,7 +92,7 @@ The following software and libraries are required to run qutebrowser:
 * http://qt-project.org/[Qt] 5.2.0 or newer (5.4.1 recommended)
 * QtWebKit
 * http://www.riverbankcomputing.com/software/pyqt/intro[PyQt] 5.2.0 or newer
-(5.3.2 recommended) for Python 3
+(5.4.1 recommended) for Python 3
 * https://pypi.python.org/pypi/setuptools/[pkg_resources/setuptools]
 * http://fdik.org/pyPEG/[pyPEG2]
 * http://jinja.pocoo.org/[jinja2]
@@ -107,8 +108,8 @@ console:
 * https://pypi.python.org/pypi/colorlog/[colorlog]
 * On Windows: https://pypi.python.org/pypi/colorama/[colorama]
 
-See link:doc/INSTALL.asciidoc[INSTALL] for directions on how to install
-qutebrowser and its dependencies.
+See link:INSTALL.asciidoc[INSTALL] for directions on how to install qutebrowser
+and its dependencies.
 
 Donating
 --------
@@ -133,6 +134,8 @@ Contributors, sorted by the number of commits in descending order:
 
 // QUTE_AUTHORS_START
 * Florian Bruhin
+* Bruno Oliveira
+* Raphael Pierzina
 * Joel Torstensson
 * Claude
 * ZDarian
@@ -157,6 +160,7 @@ Contributors, sorted by the number of commits in descending order:
 * Helen Sherwood-Taylor
 * HalosGhost
 * Gregor Pohl
+* Franz Fellner
 * Eivind Uggedal
 * Andreas Fischer
 // QUTE_AUTHORS_END
@@ -164,7 +168,7 @@ Contributors, sorted by the number of commits in descending order:
 The following people have contributed graphics:
 
 * WOFall (icon)
-* regines (keybinding cheatsheet)
+* regines (key binding cheatsheet)
 
 Thanks / Similiar projects
 --------------------------

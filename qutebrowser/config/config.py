@@ -20,8 +20,8 @@
 """Configuration storage and config-related utilities.
 
 This borrows a lot of ideas from configparser, but also has some things that
-are fundamentally different. This is why nothing inherts from configparser, but
-we borrow some methods and classes from there where it makes sense.
+are fundamentally different. This is why nothing inherits from configparser,
+but we borrow some methods and classes from there where it makes sense.
 """
 
 import os
@@ -44,7 +44,7 @@ from qutebrowser.utils.usertypes import Completion
 
 class change_filter:  # pylint: disable=invalid-name
 
-    """Decorator to register a new command handler.
+    """Decorator to filter calls based on a config section/option matching.
 
     This could also be a function, but as a class (with a "wrong" name) it's
     much cleaner to implement.
@@ -60,7 +60,8 @@ class change_filter:  # pylint: disable=invalid-name
         Gets called on parse-time with the decorator arguments.
 
         Args:
-            See class attributes.
+            sectname: The section to be filtered.
+            optname: The option to be filtered.
         """
         if sectname not in configdata.DATA:
             raise configexc.NoSectionError(sectname)
@@ -70,7 +71,7 @@ class change_filter:  # pylint: disable=invalid-name
         self._optname = optname
 
     def __call__(self, func):
-        """Register the command before running the function.
+        """Filter calls to the decorated function.
 
         Gets called when a function should be decorated.
 
@@ -112,13 +113,16 @@ def section(sect):
     return objreg.get('config')[sect]
 
 
-def _init_main_config():
-    """Initialize the main config."""
+def _init_main_config(parent=None):
+    """Initialize the main config.
+
+    Args:
+        parent: The parent to pass to ConfigManager.
+    """
     try:
-        app = objreg.get('app')
         args = objreg.get('args')
         config_obj = ConfigManager(standarddir.config(), 'qutebrowser.conf',
-                                   args.relaxed_config, app)
+                                   args.relaxed_config, parent=parent)
     except (configexc.Error, configparser.Error, UnicodeDecodeError) as e:
         log.init.exception(e)
         errstr = "Error while reading config:"
@@ -144,16 +148,23 @@ def _init_main_config():
             for sect in config_obj.sections.values():
                 for opt in sect.values.values():
                     if opt.values['conf'] is None:
-                        # Option added to builtin defaults but not in user's
+                        # Option added to built-in defaults but not in user's
                         # config yet
                         save_manager.save('config', explicit=True, force=True)
                         return
 
 
-def _init_key_config():
-    """Initialize the key config."""
+def _init_key_config(parent):
+    """Initialize the key config.
+
+    Args:
+        parent: The parent to use for the KeyConfigParser.
+    """
     try:
-        key_config = keyconf.KeyConfigParser(standarddir.config(), 'keys.conf')
+        args = objreg.get('args')
+        key_config = keyconf.KeyConfigParser(standarddir.config(), 'keys.conf',
+                                             args.relaxed_config,
+                                             parent=parent)
     except (keyconf.KeyConfigError, UnicodeDecodeError) as e:
         log.init.exception(e)
         errstr = "Error while reading key config:\n"
@@ -171,14 +182,22 @@ def _init_key_config():
             save_manager = objreg.get('save-manager')
             filename = os.path.join(standarddir.config(), 'keys.conf')
             save_manager.add_saveable(
-                'key-config', key_config.save, key_config.changed,
-                config_opt=('general', 'auto-save-config'), filename=filename)
+                'key-config', key_config.save, key_config.config_dirty,
+                config_opt=('general', 'auto-save-config'), filename=filename,
+                dirty=key_config.is_dirty)
 
 
 def _init_misc():
     """Initialize misc. config-related files."""
     save_manager = objreg.get('save-manager')
     state_config = ini.ReadWriteConfigParser(standarddir.data(), 'state')
+    for sect in ('general', 'geometry'):
+        try:
+            state_config.add_section(sect)
+        except configparser.DuplicateSectionError:
+            pass
+    # See commit a98060e020a4ba83b663813a4b9404edb47f28ad.
+    state_config['general'].pop('fooled', None)
     objreg.register('state-config', state_config)
     save_manager.add_saveable('state-config', state_config.save)
 
@@ -207,10 +226,14 @@ def _init_misc():
         QSettings.setPath(fmt, QSettings.UserScope, path)
 
 
-def init():
-    """Initialize the config."""
-    _init_main_config()
-    _init_key_config()
+def init(parent=None):
+    """Initialize the config.
+
+    Args:
+        parent: The parent to pass to QObjects which get initialized.
+    """
+    _init_main_config(parent)
+    _init_key_config(parent)
     _init_misc()
 
 
@@ -262,8 +285,8 @@ class ConfigManager(QObject):
         ('completion', 'history-length'): 'cmd-history-max-items',
     }
     DELETED_OPTIONS = [
-        ('colors', 'tab.seperator'),
-        ('colors', 'tabs.seperator'),
+        ('colors', 'tab.separator'),
+        ('colors', 'tabs.separator'),
         ('colors', 'completion.item.bg'),
     ]
 
@@ -273,7 +296,7 @@ class ConfigManager(QObject):
     def __init__(self, configdir, fname, relaxed=False, parent=None):
         super().__init__(parent)
         self._initialized = False
-        self.sections = configdata.DATA
+        self.sections = configdata.data()
         self._interpolation = configparser.ExtendedInterpolation()
         self._proxies = {}
         for sectname in self.sections.keys():
@@ -335,7 +358,7 @@ class ConfigManager(QObject):
             try:
                 desc = self.sections[sectname].descriptions[optname]
             except KeyError:
-                log.misc.exception("No description for {}.{}!".format(
+                log.config.exception("No description for {}.{}!".format(
                     sectname, optname))
                 continue
             for descline in desc.splitlines():
@@ -452,7 +475,7 @@ class ConfigManager(QObject):
 
     def _changed(self, sectname, optname):
         """Notify other objects the config has changed."""
-        log.misc.debug("Config option changed: {} -> {}".format(
+        log.config.debug("Config option changed: {} -> {}".format(
             sectname, optname))
         if sectname in ('colors', 'fonts'):
             self.style_changed.emit(sectname, optname)
@@ -476,7 +499,7 @@ class ConfigManager(QObject):
     def items(self, sectname, raw=True):
         """Get a list of (optname, value) tuples for a section.
 
-        Implemented for configparser interpolation compatbility.
+        Implemented for configparser interpolation compatibility
 
         Args:
             sectname: The name of the section to get.
@@ -539,7 +562,7 @@ class ConfigManager(QObject):
             The value of the option.
         """
         if not self._initialized:
-            raise Exception("get got called before initialisation was "
+            raise Exception("get got called before initialization was "
                             "complete!")
         try:
             sect = self.sections[sectname]
@@ -558,13 +581,11 @@ class ConfigManager(QObject):
             newval = val.typ.transform(newval)
         return newval
 
-    @cmdutils.register(name='set', instance='config',
+    @cmdutils.register(name='set', instance='config', win_id='win_id',
                        completion=[Completion.section, Completion.option,
                                    Completion.value])
-    def set_command(self, win_id: {'special': 'win_id'},
-                    sectname: {'name': 'section'}=None,
-                    optname: {'name': 'option'}=None, value=None, temp=False,
-                    print_val: {'name': 'print'}=False):
+    def set_command(self, win_id, section_=None, option=None, value=None,
+                    temp=False, print_=False):
         """Set an option.
 
         If the option name ends with '?', the value of the option is shown
@@ -577,38 +598,38 @@ class ConfigManager(QObject):
         Wrapper for self.set() to output exceptions in the status bar.
 
         Args:
-            sectname: The section where the option is in.
-            optname: The name of the option.
+            section_: The section where the option is in.
+            option: The name of the option.
             value: The value to set.
             temp: Set value temporarily.
-            print_val: Print the value after setting.
+            print_: Print the value after setting.
         """
-        if sectname is not None and optname is None:
+        if section_ is not None and option is None:
             raise cmdexc.CommandError(
                 "set: Either both section and option have to be given, or "
                 "neither!")
-        if sectname is None and optname is None:
+        if section_ is None and option is None:
             tabbed_browser = objreg.get('tabbed-browser', scope='window',
                                         window=win_id)
             tabbed_browser.openurl(QUrl('qute:settings'), newtab=False)
             return
 
-        if optname.endswith('?'):
-            optname = optname[:-1]
-            print_val = True
+        if option.endswith('?'):
+            option = option[:-1]
+            print_ = True
         else:
             try:
-                if optname.endswith('!') and value is None:
-                    val = self.get(sectname, optname[:-1])
+                if option.endswith('!') and value is None:
+                    val = self.get(section_, option[:-1])
                     layer = 'temp' if temp else 'conf'
                     if isinstance(val, bool):
-                        self.set(layer, sectname, optname[:-1], str(not val))
+                        self.set(layer, section_, option[:-1], str(not val))
                     else:
                         raise cmdexc.CommandError(
                             "set: Attempted inversion of non-boolean value.")
                 elif value is not None:
                     layer = 'temp' if temp else 'conf'
-                    self.set(layer, sectname, optname, value)
+                    self.set(layer, section_, option, value)
                 else:
                     raise cmdexc.CommandError("set: The following arguments "
                                               "are required: value")
@@ -616,10 +637,10 @@ class ConfigManager(QObject):
                 raise cmdexc.CommandError("set: {} - {}".format(
                     e.__class__.__name__, e))
 
-        if print_val:
-            val = self.get(sectname, optname, transformed=False)
+        if print_:
+            val = self.get(section_, option, transformed=False)
             message.info(win_id, "{} {} = {}".format(
-                sectname, optname, val), immediately=True)
+                section_, option, val), immediately=True)
 
     def set(self, layer, sectname, optname, value, validate=True):
         """Set an option.

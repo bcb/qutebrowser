@@ -23,15 +23,19 @@ import functools
 import types
 
 from PyQt5.QtCore import QCoreApplication
+try:
+    import hunter
+except ImportError:
+    hunter = None
 
-from qutebrowser.utils import log, objreg, usertypes
+from qutebrowser.utils import log, objreg, usertypes, message
 from qutebrowser.commands import cmdutils, runners, cmdexc
 from qutebrowser.config import style
 from qutebrowser.misc import consolewidget
 
 
-@cmdutils.register(scope='window', maxsplit=1)
-def later(ms: {'type': int}, command, win_id: {'special': 'win_id'}):
+@cmdutils.register(maxsplit=1, no_cmd_split=True, win_id='win_id')
+def later(ms: {'type': int}, command, win_id):
     """Execute a command after some time.
 
     Args:
@@ -59,8 +63,8 @@ def later(ms: {'type': int}, command, win_id: {'special': 'win_id'}):
         raise
 
 
-@cmdutils.register(scope='window', maxsplit=1)
-def repeat(times: {'type': int}, command, win_id: {'special': 'win_id'}):
+@cmdutils.register(maxsplit=1, no_cmd_split=True, win_id='win_id')
+def repeat(times: {'type': int}, command, win_id):
     """Repeat a given command.
 
     Args:
@@ -72,6 +76,36 @@ def repeat(times: {'type': int}, command, win_id: {'special': 'win_id'}):
     commandrunner = runners.CommandRunner(win_id)
     for _ in range(times):
         commandrunner.run_safely(command)
+
+
+@cmdutils.register(hide=True, win_id='win_id')
+def message_error(win_id, text):
+    """Show an error message in the statusbar.
+
+    Args:
+        text: The text to show.
+    """
+    message.error(win_id, text)
+
+
+@cmdutils.register(hide=True, win_id='win_id')
+def message_info(win_id, text):
+    """Show an info message in the statusbar.
+
+    Args:
+        text: The text to show.
+    """
+    message.info(win_id, text)
+
+
+@cmdutils.register(hide=True, win_id='win_id')
+def message_warning(win_id, text):
+    """Show a warning message in the statusbar.
+
+    Args:
+        text: The text to show.
+    """
+    message.warning(win_id, text)
 
 
 @cmdutils.register(debug=True)
@@ -116,3 +150,19 @@ def debug_console():
         con_widget = consolewidget.ConsoleWidget()
         objreg.register('debug-console', con_widget)
     con_widget.show()
+
+
+@cmdutils.register(debug=True, maxsplit=0, no_cmd_split=True)
+def debug_trace(expr=""):
+    """Trace executed code via hunter.
+
+    Args:
+        expr: What to trace, passed to hunter.
+    """
+    if hunter is None:
+        raise cmdexc.CommandError("You need to install 'hunter' to use this "
+                                  "command!")
+    try:
+        eval('hunter.trace({})'.format(expr))
+    except Exception as e:
+        raise cmdexc.CommandError("{}: {}".format(e.__class__.__name__, e))

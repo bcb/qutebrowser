@@ -21,7 +21,6 @@
 
 import functools
 
-from PyQt5.QtGui import QWindow
 from PyQt5.QtCore import pyqtSignal, Qt, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWebKitWidgets import QWebView
@@ -30,6 +29,33 @@ from qutebrowser.keyinput import modeparsers, keyparser
 from qutebrowser.config import config
 from qutebrowser.commands import cmdexc, cmdutils
 from qutebrowser.utils import usertypes, log, objreg, utils
+
+
+class KeyEvent:
+
+    """A small wrapper over a QKeyEvent storing its data.
+
+    This is needed because Qt apparently mutates existing events with new data.
+    It doesn't store the modifiers because they can be different for a key
+    press/release.
+
+    Attributes:
+        key: A Qt.Key member (QKeyEvent::key).
+        text: A string (QKeyEvent::text).
+    """
+
+    def __init__(self, keyevent):
+        self.key = keyevent.key()
+        self.text = keyevent.text()
+
+    def __repr__(self):
+        return utils.get_repr(self, key=self.key, text=self.text)
+
+    def __eq__(self, other):
+        return self.key == other.key and self.text == other.text
+
+    def __hash__(self):
+        return hash((self.key, self.text))
 
 
 class NotInModeError(Exception):
@@ -93,46 +119,6 @@ def maybe_leave(win_id, mode, reason=None):
         log.modes.debug("{} (leave reason: {})".format(e, reason))
 
 
-class EventFilter(QObject):
-
-    """Event filter which passes the event to the corrent ModeManager."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._activated = True
-
-    def eventFilter(self, obj, event):
-        """Forward events to the correct modeman."""
-        try:
-            if not self._activated:
-                return False
-            if event.type() not in [QEvent.KeyPress, QEvent.KeyRelease]:
-                # We're not interested in non-key-events so we pass them
-                # through.
-                return False
-            if not isinstance(obj, QWindow):
-                # We already handled this same event at some point earlier, so
-                # we're not interested in it anymore.
-                return False
-            if (QApplication.instance().activeWindow() not in
-                    objreg.window_registry.values()):
-                # Some other window (print dialog, etc.) is focused so we pass
-                # the event through.
-                return False
-            try:
-                modeman = objreg.get('mode-manager', scope='window',
-                                     window='current')
-                return modeman.eventFilter(event)
-            except objreg.RegistryUnavailableError:
-                # No window available yet, or not a MainWindow
-                return False
-        except:
-            # If there is an exception in here and we leave the eventfilter
-            # activated, we'll get an infinite loop and a stack overflow.
-            self._activated = False
-            raise
-
-
 class ModeManager(QObject):
 
     """Manager for keyboard modes.
@@ -143,7 +129,7 @@ class ModeManager(QObject):
         _win_id: The window ID of this ModeManager
         _handlers: A dictionary of modes and their handlers.
         _forward_unbound_keys: If we should forward unbound keys.
-        _releaseevents_to_pass: A list of keys where the keyPressEvent was
+        _releaseevents_to_pass: A set of KeyEvents where the keyPressEvent was
                                 passed through, so the release event should as
                                 well.
 
@@ -166,7 +152,7 @@ class ModeManager(QObject):
         self._handlers = {}
         self.passthrough = []
         self.mode = usertypes.KeyMode.normal
-        self._releaseevents_to_pass = []
+        self._releaseevents_to_pass = set()
         self._forward_unbound_keys = config.get(
             'input', 'forward-unbound-keys')
         objreg.get('config').changed.connect(self.set_forward_unbound_keys)
@@ -207,7 +193,7 @@ class ModeManager(QObject):
             filter_this = True
 
         if not filter_this:
-            self._releaseevents_to_pass.append(event)
+            self._releaseevents_to_pass.add(KeyEvent(event))
 
         if curmode != usertypes.KeyMode.insert:
             log.modes.debug("handled: {}, forward-unbound-keys: {}, "
@@ -228,10 +214,9 @@ class ModeManager(QObject):
             True if event should be filtered, False otherwise.
         """
         # handle like matching KeyPress
-        if event in self._releaseevents_to_pass:
-            # remove all occurences
-            self._releaseevents_to_pass = [
-                e for e in self._releaseevents_to_pass if e != event]
+        keyevent = KeyEvent(event)
+        if keyevent in self._releaseevents_to_pass:
+            self._releaseevents_to_pass.remove(keyevent)
             filter_this = False
         else:
             filter_this = True
@@ -245,7 +230,7 @@ class ModeManager(QObject):
         Args:
             mode: The name of the mode.
             handler: Handler for keyPressEvents.
-            passthrough: Whether to pass keybindings in this mode through to
+            passthrough: Whether to pass key bindings in this mode through to
                          the widgets.
         """
         if not isinstance(mode, usertypes.KeyMode):

@@ -7,7 +7,7 @@
 |<<general-ignore-case,ignore-case>>|Whether to find text on a page case-insensitively.
 |<<general-wrap-search,wrap-search>>|Whether to wrap finding text to the top when arriving at the end.
 |<<general-startpage,startpage>>|The default page(s) to open at the start, separated by commas.
-|<<general-default-page,default-page>>|The page to open if :open -t/-b/-w is used without URL.
+|<<general-default-page,default-page>>|The page to open if :open -t/-b/-w is used without URL. Use `about:blank` for a blank page.
 |<<general-auto-search,auto-search>>|Whether to start a search when something else than a URL is entered.
 |<<general-auto-save-config,auto-save-config>>|Whether to save the config automatically on quit.
 |<<general-auto-save-interval,auto-save-interval>>|How often (in milliseconds) to auto-save config/cookies/etc.
@@ -22,6 +22,7 @@
 |<<general-new-instance-open-target,new-instance-open-target>>|How to open links in an existing instance if a new one is launched.
 |<<general-log-javascript-console,log-javascript-console>>|Whether to log javascript console messages.
 |<<general-save-session,save-session>>|Whether to always save the open pages.
+|<<general-session-default-name,session-default-name>>|The name of the session to save by default, or empty for the last loaded session.
 |==============
 
 .Quick reference for section ``ui''
@@ -30,6 +31,7 @@
 |Setting|Description
 |<<ui-zoom-levels,zoom-levels>>|The available zoom levels, separated by commas.
 |<<ui-default-zoom,default-zoom>>|The default zoom level.
+|<<ui-downloads-position,downloads-position>>|Where to show the downloaded files.
 |<<ui-message-timeout,message-timeout>>|Time (in ms) to show messages in the statusbar for.
 |<<ui-message-unfocused,message-unfocused>>|Whether to show messages in unfocused windows.
 |<<ui-confirm-quit,confirm-quit>>|Whether to confirm quitting the application.
@@ -41,6 +43,7 @@
 |<<ui-remove-finished-downloads,remove-finished-downloads>>|Whether to remove finished downloads automatically.
 |<<ui-hide-statusbar,hide-statusbar>>|Whether to hide the statusbar unless a message is shown.
 |<<ui-window-title-format,window-title-format>>|The format to use for the window title. The following placeholders are defined:
+|<<ui-hide-mouse-cursor,hide-mouse-cursor>>|Whether to hide the mouse cursor.
 |==============
 
 .Quick reference for section ``network''
@@ -74,8 +77,8 @@
 [options="header",width="75%",cols="25%,75%"]
 |==============
 |Setting|Description
-|<<input-timeout,timeout>>|Timeout for ambiguous keybindings.
-|<<input-partial-timeout,partial-timeout>>|Timeout for partially typed keybindings.
+|<<input-timeout,timeout>>|Timeout for ambiguous key bindings.
+|<<input-partial-timeout,partial-timeout>>|Timeout for partially typed key bindings.
 |<<input-insert-mode-on-plugins,insert-mode-on-plugins>>|Whether to switch to insert mode when clicking flash and other plugins.
 |<<input-auto-leave-insert-mode,auto-leave-insert-mode>>|Whether to leave insert mode if a non-editable element is clicked.
 |<<input-auto-insert-mode,auto-insert-mode>>|Whether to automatically enter insert mode if an editable element is focused after page load.
@@ -83,6 +86,7 @@
 |<<input-spatial-navigation,spatial-navigation>>|Enables or disables the Spatial Navigation feature
 |<<input-links-included-in-focus-chain,links-included-in-focus-chain>>|Whether hyperlinks should be included in the keyboard focus chain.
 |<<input-rocker-gestures,rocker-gestures>>|Whether to enable Opera-like mouse rocker gestures. This disables the context menu.
+|<<input-mouse-zoom-divider,mouse-zoom-divider>>|How much to divide the mouse wheel movements to translate them into zoom increments.
 |==============
 
 .Quick reference for section ``tabs''
@@ -92,10 +96,10 @@
 |<<tabs-background-tabs,background-tabs>>|Whether to open new tabs (middleclick/ctrl+click) in background.
 |<<tabs-select-on-remove,select-on-remove>>|Which tab to select when the focused tab is removed.
 |<<tabs-new-tab-position,new-tab-position>>|How new tabs are positioned.
-|<<tabs-new-tab-position-explicit,new-tab-position-explicit>>|How new tabs opened explicitely are positioned.
+|<<tabs-new-tab-position-explicit,new-tab-position-explicit>>|How new tabs opened explicitly are positioned.
 |<<tabs-last-close,last-close>>|Behaviour when the last tab is closed.
-|<<tabs-hide-auto,hide-auto>>|Hide the tabbar if only one tab is open.
-|<<tabs-hide-always,hide-always>>|Always hide the tabbar.
+|<<tabs-hide-auto,hide-auto>>|Hide the tab bar if only one tab is open.
+|<<tabs-hide-always,hide-always>>|Always hide the tab bar.
 |<<tabs-wrap,wrap>>|Whether to wrap when changing tabs.
 |<<tabs-movable,movable>>|Whether tabs should be movable.
 |<<tabs-close-mouse-button,close-mouse-button>>|On which mouse button to close tabs.
@@ -113,8 +117,8 @@
 |==============
 |Setting|Description
 |<<storage-download-directory,download-directory>>|The directory to save downloads to. An empty value selects a sensible os-specific default. Will expand environment variables.
-|<<storage-maximum-pages-in-cache,maximum-pages-in-cache>>|The maximum number of pages to hold in the memory page cache.
-|<<storage-object-cache-capacities,object-cache-capacities>>|The capacities for the memory cache for dead objects such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, cacheMaxDead, totalCapacity.
+|<<storage-maximum-pages-in-cache,maximum-pages-in-cache>>|The maximum number of pages to hold in the global memory page cache.
+|<<storage-object-cache-capacities,object-cache-capacities>>|The capacities for the global memory cache for dead objects such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, cacheMaxDead, totalCapacity.
 |<<storage-offline-storage-default-quota,offline-storage-default-quota>>|Default quota for new offline storage databases.
 |<<storage-offline-web-application-cache-quota,offline-web-application-cache-quota>>|Quota for the offline web application cache.
 |<<storage-offline-storage-database,offline-storage-database>>|Whether support for the HTML 5 offline storage feature is enabled.
@@ -142,6 +146,7 @@
 |<<content-cookies-accept,cookies-accept>>|Whether to accept cookies.
 |<<content-cookies-store,cookies-store>>|Whether to store cookies.
 |<<content-host-block-lists,host-block-lists>>|List of URLs of lists which contain hosts to block.
+|<<content-host-blocking-enabled,host-blocking-enabled>>|Whether host blocking is enabled.
 |==============
 
 .Quick reference for section ``hints''
@@ -194,7 +199,7 @@
 |<<colors-tabs.bg.odd,tabs.bg.odd>>|Background color of unselected odd tabs.
 |<<colors-tabs.bg.even,tabs.bg.even>>|Background color of unselected even tabs.
 |<<colors-tabs.bg.selected,tabs.bg.selected>>|Background color of selected tabs.
-|<<colors-tabs.bg.bar,tabs.bg.bar>>|Background color of the tabbar.
+|<<colors-tabs.bg.bar,tabs.bg.bar>>|Background color of the tab bar.
 |<<colors-tabs.indicator.start,tabs.indicator.start>>|Color gradient start for the tab indicator.
 |<<colors-tabs.indicator.stop,tabs.indicator.stop>>|Color gradient end for the tab indicator.
 |<<colors-tabs.indicator.error,tabs.indicator.error>>|Color for the tab indicator on errors..
@@ -216,7 +221,7 @@
 |Setting|Description
 |<<fonts-_monospace,_monospace>>|Default monospace fonts.
 |<<fonts-completion,completion>>|Font used in the completion widget.
-|<<fonts-tabbar,tabbar>>|Font used in the tabbar.
+|<<fonts-tabbar,tabbar>>|Font used in the tab bar.
 |<<fonts-statusbar,statusbar>>|Font used in the statusbar.
 |<<fonts-downloads,downloads>>|Font used for the downloadbar.
 |<<fonts-hints,hints>>|Font used for the hints.
@@ -267,7 +272,7 @@ Default: +pass:[https://www.duckduckgo.com]+
 
 [[general-default-page]]
 === default-page
-The page to open if :open -t/-b/-w is used without URL.
+The page to open if :open -t/-b/-w is used without URL. Use `about:blank` for a blank page.
 
 Default: +pass:[${startpage}]+
 
@@ -388,7 +393,9 @@ How to open links in an existing instance if a new one is launched.
 Valid values:
 
  * +tab+: Open a new tab in the existing window and activate it.
+ * +tab-bg+: Open a new background tab in the existing window and activate it.
  * +tab-silent+: Open a new tab in the existing window without activating it.
+ * +tab-bg-silent+: Open a new background tab in the existing window without activating it.
  * +window+: Open in a new window.
 
 Default: +pass:[window]+
@@ -415,6 +422,12 @@ Valid values:
 
 Default: +pass:[false]+
 
+[[general-session-default-name]]
+=== session-default-name
+The name of the session to save by default, or empty for the last loaded session.
+
+Default: empty
+
 == ui
 General options related to the user interface.
 
@@ -429,6 +442,17 @@ Default: +pass:[25%,33%,50%,67%,75%,90%,100%,110%,125%,150%,175%,200%,250%,300%,
 The default zoom level.
 
 Default: +pass:[100%]+
+
+[[ui-downloads-position]]
+=== downloads-position
+Where to show the downloaded files.
+
+Valid values:
+
+ * +north+
+ * +south+
+
+Default: +pass:[north]+
 
 [[ui-message-timeout]]
 === message-timeout
@@ -535,11 +559,22 @@ The format to use for the window title. The following placeholders are defined:
 
 * `{perc}`: The percentage as a string like `[10%]`.
 * `{perc_raw}`: The raw percentage, e.g. `10`
-* `{title}`: The title of the current webpage
+* `{title}`: The title of the current web page
 * `{title_sep}`: The string ` - ` if a title is set, empty otherwise.
 * `{id}`: The internal window ID of this window.
 
 Default: +pass:[{perc}{title}{title_sep}qutebrowser]+
+
+[[ui-hide-mouse-cursor]]
+=== hide-mouse-cursor
+Whether to hide the mouse cursor.
+
+Valid values:
+
+ * +true+
+ * +false+
+
+Default: +pass:[false]+
 
 == network
 Settings related to the network.
@@ -695,13 +730,13 @@ Options related to input modes.
 
 [[input-timeout]]
 === timeout
-Timeout for ambiguous keybindings.
+Timeout for ambiguous key bindings.
 
 Default: +pass:[500]+
 
 [[input-partial-timeout]]
 === partial-timeout
-Timeout for partially typed keybindings.
+Timeout for partially typed key bindings.
 
 Default: +pass:[1000]+
 
@@ -785,6 +820,12 @@ Valid values:
 
 Default: +pass:[false]+
 
+[[input-mouse-zoom-divider]]
+=== mouse-zoom-divider
+How much to divide the mouse wheel movements to translate them into zoom increments.
+
+Default: +pass:[512]+
+
 == tabs
 Configuration of the tab bar.
 
@@ -826,7 +867,7 @@ Default: +pass:[right]+
 
 [[tabs-new-tab-position-explicit]]
 === new-tab-position-explicit
-How new tabs opened explicitely are positioned.
+How new tabs opened explicitly are positioned.
 
 Valid values:
 
@@ -845,13 +886,15 @@ Valid values:
 
  * +ignore+: Don't do anything.
  * +blank+: Load a blank page.
+ * +startpage+: Load the start page.
+ * +default-page+: Load the default page.
  * +close+: Close the window.
 
 Default: +pass:[ignore]+
 
 [[tabs-hide-auto]]
 === hide-auto
-Hide the tabbar if only one tab is open.
+Hide the tab bar if only one tab is open.
 
 Valid values:
 
@@ -862,7 +905,7 @@ Default: +pass:[false]+
 
 [[tabs-hide-always]]
 === hide-always
-Always hide the tabbar.
+Always hide the tab bar.
 
 Valid values:
 
@@ -964,7 +1007,7 @@ The format to use for the tab title. The following placeholders are defined:
 
 * `{perc}`: The percentage as a string like `[10%]`.
 * `{perc_raw}`: The raw percentage, e.g. `10`
-* `{title}`: The title of the current webpage
+* `{title}`: The title of the current web page
 * `{title_sep}`: The string ` - ` if a title is set, empty otherwise.
 * `{index}`: The index of this tab.
 * `{id}`: The internal tab ID of this tab.
@@ -982,7 +1025,7 @@ Default: empty
 
 [[storage-maximum-pages-in-cache]]
 === maximum-pages-in-cache
-The maximum number of pages to hold in the memory page cache.
+The maximum number of pages to hold in the global memory page cache.
 
 The Page Cache allows for a nicer user experience when navigating forth or back to pages in the forward/back history, by pausing and resuming up to _n_ pages.
 
@@ -992,7 +1035,7 @@ Default: empty
 
 [[storage-object-cache-capacities]]
 === object-cache-capacities
-The capacities for the memory cache for dead objects such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, cacheMaxDead, totalCapacity.
+The capacities for the global memory cache for dead objects such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, cacheMaxDead, totalCapacity.
 
 The _cacheMinDeadCapacity_ specifies the minimum number of bytes that dead objects should consume when the cache is under pressure.
 
@@ -1200,7 +1243,7 @@ Whether to accept cookies.
 
 Valid values:
 
- * +default+: Default QtWebKit behaviour.
+ * +default+: Default QtWebKit behavior.
  * +never+: Don't accept cookies at all.
 
 Default: +pass:[default]+
@@ -1227,6 +1270,17 @@ The file can be in one of the following formats:
 - A zip-file of any of the above, with either only one file, or a file named 'hosts' (with any extension).
 
 Default: +pass:[http://www.malwaredomainlist.com/hostslist/hosts.txt,http://someonewhocares.org/hosts/hosts,http://winhelp2002.mvps.org/hosts.zip,http://malwaredomains.lehigh.edu/files/justdomains.zip,http://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&amp;mimetype=plaintext]+
+
+[[content-host-blocking-enabled]]
+=== host-blocking-enabled
+Whether host blocking is enabled.
+
+Valid values:
+
+ * +true+
+ * +false+
+
+Default: +pass:[true]+
 
 == hints
 Hinting settings.
@@ -1313,7 +1367,7 @@ Default: +pass:[\bprev(ious)?\b,\bback\b,\bolder\b,\b[&lt;←≪]\b,\b(&lt;&lt;|
 
 == searchengines
 Definitions of search engines which can be used via the address bar.
-The searchengine named `DEFAULT` is used when `general -> auto-search` is true and something else than a URL was entered to be opened. Other search engines can be used via the bang-syntax, e.g. `:open qutebrowser !google`. The string `{}` will be replaced by the search term, use `{{` and `}}` for literal `{`/`}` signs.
+The searchengine named `DEFAULT` is used when `general -> auto-search` is true and something else than a URL was entered to be opened. Other search engines can be used by prepending the search engine name to the search term, e.g. `:open google qutebrowser`. The string `{}` will be replaced by the search term, use `{{` and `}}` for literal `{`/`}` signs.
 
 == aliases
 Aliases for commands.
@@ -1516,7 +1570,7 @@ Default: +pass:[black]+
 
 [[colors-tabs.bg.bar]]
 === tabs.bg.bar
-Background color of the tabbar.
+Background color of the tab bar.
 
 Default: +pass:[#555555]+
 
@@ -1631,7 +1685,7 @@ Default: +pass:[8pt ${_monospace}]+
 
 [[fonts-tabbar]]
 === tabbar
-Font used in the tabbar.
+Font used in the tab bar.
 
 Default: +pass:[8pt ${_monospace}]+
 

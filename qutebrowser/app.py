@@ -24,21 +24,28 @@ import sys
 import subprocess
 import configparser
 import signal
+import pdb
 import bdb
 import base64
 import functools
 import traceback
 import faulthandler
+import json
+import time
 
 from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox
-from PyQt5.QtGui import QDesktopServices, QPixmap, QIcon
+from PyQt5.QtGui import QDesktopServices, QPixmap, QIcon, QCursor, QWindow
 from PyQt5.QtCore import (pyqtSlot, qInstallMessageHandler, QTimer, QUrl,
-                          QObject, Qt, QSocketNotifier)
+                          QObject, Qt, QSocketNotifier, QEvent)
+try:
+    import hunter
+except ImportError:
+    hunter = None
 
 import qutebrowser
 import qutebrowser.resources  # pylint: disable=unused-import
 from qutebrowser.completion.models import instances as completionmodels
-from qutebrowser.commands import cmdutils, runners
+from qutebrowser.commands import cmdutils, runners, cmdexc
 from qutebrowser.config import style, config, websettings, configexc
 from qutebrowser.browser import quickmarks, cookies, cache, adblock, history
 from qutebrowser.browser.network import qutescheme, proxy, networkmanager
@@ -46,9 +53,8 @@ from qutebrowser.mainwindow import mainwindow
 from qutebrowser.misc import (crashdialog, readline, ipc, earlyinit,
                               savemanager, sessions)
 from qutebrowser.misc import utilcmds  # pylint: disable=unused-import
-from qutebrowser.keyinput import modeman
 from qutebrowser.utils import (log, version, message, utils, qtutils, urlutils,
-                               debug, objreg, usertypes, standarddir)
+                               objreg, usertypes, standarddir)
 # We import utilcmds to run the cmdutils.register decorators.
 
 
@@ -110,12 +116,18 @@ class Application(QApplication):
                 sys.exit(0)
             log.init.debug("Starting IPC server...")
             ipc.init()
-        except ipc.IPCError as e:
-            text = ('{}\n\nMaybe another instance is running but '
-                    'frozen?'.format(e))
-            msgbox = QMessageBox(QMessageBox.Critical, "Error while "
-                                 "connecting to running instance!", text)
-            msgbox.exec_()
+        except ipc.AddressInUseError as e:
+            # This could be a race condition...
+            log.init.debug("Got AddressInUseError, trying again.")
+            time.sleep(500)
+            sent = ipc.send_to_running_instance(self._args.command)
+            if sent:
+                sys.exit(0)
+            else:
+                ipc.display_error(e)
+                sys.exit(1)
+        except ipc.Error as e:
+            ipc.display_error(e)
             # We didn't really initialize much so far, so we just quit hard.
             sys.exit(1)
 
@@ -137,7 +149,7 @@ class Application(QApplication):
         QTimer.singleShot(0, self._process_args)
 
         log.init.debug("Initializing eventfilter...")
-        self._event_filter = modeman.EventFilter(self)
+        self._event_filter = EventFilter(self)
         self.installEventFilter(self._event_filter)
 
         log.init.debug("Connecting signals...")
@@ -174,15 +186,14 @@ class Application(QApplication):
         log.init.debug("Initializing directories...")
         standarddir.init(self._args)
         log.init.debug("Initializing config...")
-        config.init()
+        config.init(self)
         save_manager.init_autosave()
         log.init.debug("Initializing web history...")
-        history.init()
+        history.init(self)
         log.init.debug("Initializing crashlog...")
         self._handle_segfault()
         log.init.debug("Initializing sessions...")
-        session_manager = sessions.SessionManager(self)
-        objreg.register('session-manager', session_manager)
+        sessions.init(self)
         log.init.debug("Initializing js-bridge...")
         js_bridge = qutescheme.JSBridge(self)
         objreg.register('js-bridge', js_bridge)
@@ -193,7 +204,7 @@ class Application(QApplication):
         host_blocker.read_hosts()
         objreg.register('host-blocker', host_blocker)
         log.init.debug("Initializing quickmarks...")
-        quickmark_manager = quickmarks.QuickmarkManager()
+        quickmark_manager = quickmarks.QuickmarkManager(self)
         objreg.register('quickmark-manager', quickmark_manager)
         log.init.debug("Initializing proxy...")
         proxy.init()
@@ -205,6 +216,19 @@ class Application(QApplication):
         objreg.register('cache', diskcache)
         log.init.debug("Initializing completions...")
         completionmodels.init()
+        log.init.debug("Misc initialization...")
+        self.maybe_hide_mouse_cursor()
+        objreg.get('config').changed.connect(self.maybe_hide_mouse_cursor)
+
+    @config.change_filter('ui', 'hide-mouse-cursor')
+    def maybe_hide_mouse_cursor(self):
+        """Hide the mouse cursor if it isn't yet and it's configured."""
+        if config.get('ui', 'hide-mouse-cursor'):
+            if self.overrideCursor() is not None:
+                return
+            self.setOverrideCursor(QCursor(Qt.BlankCursor))
+        else:
+            self.restoreOverrideCursor()
 
     def _init_icon(self):
         """Initialize the icon of qutebrowser."""
@@ -301,6 +325,9 @@ class Application(QApplication):
             del state_config['general']['session']
         except KeyError:
             pass
+        # If this was a _restart session, delete it.
+        if name == '_restart':
+            session_manager.delete('_restart')
 
     def _get_window(self, via_ipc, force_window=False, force_tab=False):
         """Helper function for process_pos_args to get a window id.
@@ -333,7 +360,7 @@ class Application(QApplication):
                 win_id = window.win_id
                 window_to_raise = window
             win_id = window.win_id
-            if open_target != 'tab-silent':
+            if open_target not in ('tab-silent', 'tab-bg-silent'):
                 window_to_raise = window
         if window_to_raise is not None:
             window_to_raise.setWindowState(window.windowState() &
@@ -380,7 +407,10 @@ class Application(QApplication):
                     message.error(0, "Error in startup argument '{}': "
                                      "{}".format(cmd, e))
                 else:
-                    tabbed_browser.tabopen(url, background=False)
+                    open_target = config.get('general',
+                                             'new-instance-open-target')
+                    background = open_target in ('tab-bg', 'tab-bg-silent')
+                    tabbed_browser.tabopen(url, background=background)
 
     def _open_startpage(self, win_id=None):
         """Open startpage.
@@ -422,10 +452,6 @@ class Application(QApplication):
                                         window='last-focused')
             tabbed_browser.tabopen(
                 QUrl('http://www.qutebrowser.org/quickstart.html'))
-            try:
-                state_config.add_section('general')
-            except configparser.DuplicateSectionError:
-                pass
             state_config['general']['quickstart-done'] = '1'
 
     def _setup_signals(self):
@@ -546,19 +572,11 @@ class Application(QApplication):
         if self.geometry is not None:
             state_config = objreg.get('state-config')
             geom = base64.b64encode(self.geometry).decode('ASCII')
-            try:
-                state_config.add_section('geometry')
-            except configparser.DuplicateSectionError:
-                pass
             state_config['geometry']['mainwindow'] = geom
 
     def _save_version(self):
         """Save the current version to the state config."""
         state_config = objreg.get('state-config')
-        try:
-            state_config.add_section('general')
-        except configparser.DuplicateSectionError:
-            pass
         state_config['general']['version'] = qutebrowser.__version__
 
     def _destroy_crashlogfile(self):
@@ -596,7 +614,11 @@ class Application(QApplication):
         is_ignored_exception = (exctype is bdb.BdbQuit or
                                 not issubclass(exctype, Exception))
 
-        if is_ignored_exception or self._args.no_crash_dialog:
+        if self._args.pdb_postmortem:
+            pdb.post_mortem(tb)
+
+        if (is_ignored_exception or self._args.no_crash_dialog or
+                self._args.pdb_postmortem):
             # pdb exit, KeyboardInterrupt, ...
             status = 0 if is_ignored_exception else 2
             try:
@@ -641,7 +663,8 @@ class Application(QApplication):
             self._args.debug, pages, cmd_history, exc, objects)
         ret = self._crashdlg.exec_()
         if ret == QDialog.Accepted:  # restore
-            self.restart(shutdown=False, pages=pages)
+            self._do_restart(pages)
+
         # We might risk a segfault here, but that's better than continuing to
         # run in some undefined state, so we only do the most needed shutdown
         # here.
@@ -649,11 +672,12 @@ class Application(QApplication):
         self._destroy_crashlogfile()
         sys.exit(1)
 
-    def _get_restart_args(self, pages):
+    def _get_restart_args(self, pages=(), session=None):
         """Get the current working directory and args to relaunch qutebrowser.
 
         Args:
             pages: The pages to re-open.
+            session: The session to load, or None.
 
         Return:
             An (args, cwd) tuple.
@@ -676,46 +700,91 @@ class Application(QApplication):
                 # cwd=None and see if that works out.
                 # See https://github.com/The-Compiler/qutebrowser/issues/323
                 cwd = None
-        for arg in sys.argv[1:]:
-            if arg.startswith('-'):
-                # We only want to preserve options on a restart.
-                args.append(arg)
+
         # Add all open pages so they get reopened.
         page_args = []
         for win in pages:
             page_args.extend(win)
             page_args.append('')
-        if page_args:
-            args.extend(page_args[:-1])
+
+        # Serialize the argparse namespace into json and pass that to the new
+        # process via --json-args.
+        # We do this as there's no way to "unparse" the namespace while
+        # ignoring some arguments.
+        argdict = vars(self._args)
+        argdict['session'] = None
+        argdict['url'] = []
+        argdict['command'] = page_args[:-1]
+        argdict['json_args'] = None
+        # Ensure the given session (or none at all) gets opened.
+        if session is None:
+            argdict['session'] = None
+            argdict['override_restore'] = True
+        else:
+            argdict['session'] = session
+            argdict['override_restore'] = False
+        # Dump the data
+        data = json.dumps(argdict)
+        args += ['--json-args', data]
+
         log.destroy.debug("args: {}".format(args))
         log.destroy.debug("cwd: {}".format(cwd))
+
         return args, cwd
 
-    @cmdutils.register(instance='app', ignore_args=True)
-    def restart(self, shutdown=True, pages=None):
+    @cmdutils.register(instance='app')
+    def restart(self):
         """Restart qutebrowser while keeping existing tabs open."""
-        if pages is None:
-            pages = self._recover_pages()
+        try:
+            ok = self._do_restart(session='_restart')
+        except sessions.SessionError as e:
+            log.destroy.exception("Failed to save session!")
+            raise cmdexc.CommandError("Failed to save session: {}!".format(e))
+        if ok:
+            self.shutdown()
+
+    def _do_restart(self, pages=(), session=None):
+        """Inner logic to restart qutebrowser.
+
+        The "better" way to restart is to pass a session (_restart usually) as
+        that'll save the complete state.
+
+        However we don't do that (and pass a list of pages instead) when we
+        restart because of an exception, as that's a lot simpler and we don't
+        want to risk anything going wrong.
+
+        Args:
+            pages: A list of URLs to open.
+            session: The session to load, or None.
+
+        Return:
+            True if the restart succeeded, False otherwise.
+        """
         log.destroy.debug("sys.executable: {}".format(sys.executable))
         log.destroy.debug("sys.path: {}".format(sys.path))
         log.destroy.debug("sys.argv: {}".format(sys.argv))
         log.destroy.debug("frozen: {}".format(hasattr(sys, 'frozen')))
+        # Save the session if one is given.
+        if session is not None:
+            session_manager = objreg.get('session-manager')
+            session_manager.save(session)
         # Open a new process and immediately shutdown the existing one
         try:
-            args, cwd = self._get_restart_args(pages)
+            args, cwd = self._get_restart_args(pages, session)
             if cwd is None:
                 subprocess.Popen(args)
             else:
                 subprocess.Popen(args, cwd=cwd)
         except OSError:
             log.destroy.exception("Failed to restart")
+            return False
         else:
-            if shutdown:
-                self.shutdown()
+            return True
 
-    @cmdutils.register(instance='app', maxsplit=0, debug=True)
+    @cmdutils.register(instance='app', maxsplit=0, debug=True,
+                       no_cmd_split=True)
     def debug_pyeval(self, s):
-        """Evaluate a python string and display the results as a webpage.
+        """Evaluate a python string and display the results as a web page.
 
         //
 
@@ -783,7 +852,7 @@ class Application(QApplication):
 
     @cmdutils.register(instance='app', name='wq',
                        completion=[usertypes.Completion.sessions])
-    def save_and_quit(self, name='default'):
+    def save_and_quit(self, name=sessions.default):
         """Save open pages and quit.
 
         Args:
@@ -817,7 +886,7 @@ class Application(QApplication):
             session_manager.save(session, last_window=last_window,
                                  load_next_time=True)
         elif config.get('general', 'save-session'):
-            session_manager.save('default', last_window=last_window,
+            session_manager.save(sessions.default, last_window=last_window,
                                  load_next_time=True)
 
         deferrer = False
@@ -828,8 +897,8 @@ class Application(QApplication):
                 deferrer = True
         if deferrer:
             # If shutdown was called while we were asking a question, we're in
-            # a still sub-eventloop (which gets quitted now) and not in the
-            # main one.
+            # a still sub-eventloop (which gets quit now) and not in the main
+            # one.
             # This means we need to defer the real shutdown to when we're back
             # in the real main event loop, or we'll get a segfault.
             log.destroy.debug("Deferring real shutdown because question was "
@@ -879,7 +948,7 @@ class Application(QApplication):
         qInstallMessageHandler(None)
         # Now we can hopefully quit without segfaults
         log.destroy.debug("Deferring QApplication::exit...")
-        # We use a singleshot timer to exit here to minimize the likelyhood of
+        # We use a singleshot timer to exit here to minimize the likelihood of
         # segfaults.
         QTimer.singleShot(0, functools.partial(self.exit, status))
 
@@ -894,8 +963,10 @@ class Application(QApplication):
                 objreg.delete('last-focused-main-window')
             except KeyError:
                 pass
+            self.restoreOverrideCursor()
         else:
             objreg.register('last-focused-main-window', window, update=True)
+            self.maybe_hide_mouse_cursor()
 
     @pyqtSlot(QUrl)
     def open_desktopservices_url(self, url):
@@ -909,6 +980,99 @@ class Application(QApplication):
         """Extend QApplication::exit to log the event."""
         log.destroy.debug("Now calling QApplication::exit.")
         if self._args.debug_exit:
-            print("Now logging late shutdown.", file=sys.stderr)
-            debug.trace_lines(True)
+            if hunter is None:
+                print("Not logging late shutdown because hunter could not be "
+                      "imported!", file=sys.stderr)
+            else:
+                print("Now logging late shutdown.", file=sys.stderr)
+                hunter.trace()
         super().exit(status)
+
+
+class EventFilter(QObject):
+
+    """Global Qt event filter.
+
+    Attributes:
+        _activated: Whether the EventFilter is currently active.
+        _handlers; A {QEvent.Type: callable} dict with the handlers for an
+                   event.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._activated = True
+        self._handlers = {
+            QEvent.MouseButtonDblClick: self._handle_mouse_event,
+            QEvent.MouseButtonPress: self._handle_mouse_event,
+            QEvent.MouseButtonRelease: self._handle_mouse_event,
+            QEvent.MouseMove: self._handle_mouse_event,
+            QEvent.KeyPress: self._handle_key_event,
+            QEvent.KeyRelease: self._handle_key_event,
+        }
+
+    def _handle_key_event(self, event):
+        """Handle a key press/release event.
+
+        Args:
+            event: The QEvent which is about to be delivered.
+
+        Return:
+            True if the event should be filtered, False if it's passed through.
+        """
+        qapp = QApplication.instance()
+        if qapp.activeWindow() not in objreg.window_registry.values():
+            # Some other window (print dialog, etc.) is focused so we pass the
+            # event through.
+            return False
+        try:
+            man = objreg.get('mode-manager', scope='window', window='current')
+            return man.eventFilter(event)
+        except objreg.RegistryUnavailableError:
+            # No window available yet, or not a MainWindow
+            return False
+
+    def _handle_mouse_event(self, _event):
+        """Handle a mouse event.
+
+        Args:
+            _event: The QEvent which is about to be delivered.
+
+        Return:
+            True if the event should be filtered, False if it's passed through.
+        """
+        if QApplication.instance().overrideCursor() is None:
+            # Mouse cursor shown -> don't filter event
+            return False
+        else:
+            # Mouse cursor hidden -> filter event
+            return True
+
+    def eventFilter(self, obj, event):
+        """Handle an event.
+
+        Args:
+            obj: The object which will get the event.
+            event: The QEvent which is about to be delivered.
+
+        Return:
+            True if the event should be filtered, False if it's passed through.
+        """
+        try:
+            if not self._activated:
+                return False
+            if not isinstance(obj, QWindow):
+                # We already handled this same event at some point earlier, so
+                # we're not interested in it anymore.
+                return False
+            try:
+                handler = self._handlers[event.type()]
+            except KeyError:
+                return False
+            else:
+                return handler(event)
+        except:
+            # If there is an exception in here and we leave the eventfilter
+            # activated, we'll get an infinite loop and a stack overflow.
+            self._activated = False
+            raise

@@ -6,9 +6,9 @@ graft icons
 graft scripts/pylint_checkers
 graft doc/img
 graft misc
-include qutebrowser/test/testfile
+include qutebrowser/utils/testfile
 include qutebrowser/git-commit-id
-include COPYING doc/* README.asciidoc
+include COPYING doc/* README.asciidoc CONTRIBUTING.asciidoc FAQ.asciidoc INSTALL.asciidoc CHANGELOG.asciidoc
 include qutebrowser.desktop
 include requirements.txt
 include tox.ini
@@ -22,9 +22,9 @@ exclude scripts/gen_resources.sh
 exclude scripts/quit_segfault_test.sh
 exclude scripts/segfault_test.sh
 exclude doc/notes
-exclude CONTRIBUTING.asciidoc
 recursive-exclude doc *.asciidoc
-prune test
+include doc/qutebrowser.1.asciidoc
+prune tests
 exclude qutebrowser.rcc
 exclude .coveragerc
 exclude .flake8

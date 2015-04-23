@@ -62,7 +62,7 @@ class HintContext:
         frames: The QWebFrames to use.
         destroyed_frames: id()'s of QWebFrames which have been destroyed.
                           (Workaround for https://github.com/The-Compiler/qutebrowser/issues/152)
-        elems: A mapping from keystrings to (elem, label) namedtuples.
+        elems: A mapping from key strings to (elem, label) namedtuples.
         baseurl: The URL of the current page.
         target: What to do with the opened links.
                 normal/tab/tab_bg/window: Get passed to BrowserTab.
@@ -77,7 +77,7 @@ class HintContext:
         args: Custom arguments for userscript/spawn
         rapid: Whether to do rapid hinting.
         mainframe: The main QWebFrame where we started hinting in.
-        group: The group of webelements to hint.
+        group: The group of web elements to hint.
     """
 
     def __init__(self):
@@ -455,7 +455,7 @@ class HintManager(QObject):
         """Yank an element to the clipboard or primary selection.
 
         Args:
-            url: The URL to open as a QURL.
+            url: The URL to open as a QUrl.
             context: The HintContext to use.
         """
         sel = context.target == Target.yank_primary
@@ -518,6 +518,7 @@ class HintManager(QObject):
         """
         cmd = context.args[0]
         args = context.args[1:]
+        frame = context.mainframe
         env = {
             'QUTE_MODE': 'hints',
             'QUTE_SELECTED_TEXT': str(elem),
@@ -526,6 +527,7 @@ class HintManager(QObject):
         url = self._resolve_url(elem, context.baseurl)
         if url is not None:
             env['QUTE_URL'] = url.toString(QUrl.FullyEncoded)
+        env.update(userscripts.store_source(frame))
         userscripts.run(cmd, *args, win_id=self._win_id, env=env)
 
     def _spawn(self, url, context):
@@ -691,9 +693,10 @@ class HintManager(QObject):
                                  tab=self._tab_id)
             webview.openurl(url)
 
-    @cmdutils.register(instance='hintmanager', scope='tab', name='hint')
+    @cmdutils.register(instance='hintmanager', scope='tab', name='hint',
+                       win_id='win_id')
     def start(self, rapid=False, group=webelem.Group.all, target=Target.normal,
-              *args: {'nargs': '*'}, win_id: {'special': 'win_id'}):
+              *args: {'nargs': '*'}, win_id):
         """Start hinting.
 
         Args:
@@ -816,7 +819,7 @@ class HintManager(QObject):
                         '<font color="{}">{}</font>{}'.format(
                             match_color, matched, rest))
                     if self._is_hidden(elems.label):
-                        # hidden element which matches again -> unhide it
+                        # hidden element which matches again -> show it
                         self._show_elem(elems.label)
                 else:
                     # element doesn't match anymore -> hide it
@@ -835,7 +838,7 @@ class HintManager(QObject):
                 if (filterstr is None or
                         filterstr.lower() in str(elems.elem).lower()):
                     if self._is_hidden(elems.label):
-                        # hidden element which matches again -> unhide it
+                        # hidden element which matches again -> show it
                         self._show_elem(elems.label)
                 else:
                     # element doesn't match anymore -> hide it
@@ -887,6 +890,10 @@ class HintManager(QObject):
             Target.spawn: self._spawn,
         }
         elem = self._context.elems[keystr].elem
+        if elem.webFrame() is None:
+            message.error(self._win_id, "This element has no webframe.",
+                          immediately=True)
+            return
         if self._context.target in elem_handlers:
             handler = functools.partial(
                 elem_handlers[self._context.target], elem, self._context)

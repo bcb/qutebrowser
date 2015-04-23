@@ -1264,6 +1264,13 @@ class Position(BaseType):
         return self.MAPPING[value]
 
 
+class VerticalPosition(BaseType):
+
+    """The position of the download bar."""
+
+    valid_values = ValidValues('north', 'south')
+
+
 class UrlList(List):
 
     """A list of URLs."""
@@ -1294,6 +1301,22 @@ class UrlList(List):
                                                 "{}".format(val.errorString()))
 
 
+class SessionName(BaseType):
+
+    """The name of a session."""
+
+    typestr = 'session'
+
+    def validate(self, value):
+        if not value:
+            if self._none_ok:
+                return
+            else:
+                raise configexc.ValidationError(value, "may not be empty!")
+        if value.startswith('_'):
+            raise configexc.ValidationError(value, "may not start with '_'!")
+
+
 class SelectOnRemove(BaseType):
 
     """Which tab to select when the focused tab is removed."""
@@ -1321,6 +1344,8 @@ class LastClose(BaseType):
 
     valid_values = ValidValues(('ignore', "Don't do anything."),
                                ('blank', "Load a blank page."),
+                               ('startpage', "Load the start page."),
+                               ('default-page', "Load the default page."),
                                ('close', "Close the window."))
 
 
@@ -1328,7 +1353,7 @@ class AcceptCookies(BaseType):
 
     """Whether to accept a cookie."""
 
-    valid_values = ValidValues(('default', "Default QtWebKit behaviour."),
+    valid_values = ValidValues(('default', "Default QtWebKit behavior."),
                                ('never', "Don't accept cookies at all."))
 
 
@@ -1440,9 +1465,14 @@ class NewInstanceOpenTarget(BaseType):
 
     valid_values = ValidValues(('tab', "Open a new tab in the existing "
                                        "window and activate it."),
+                               ('tab-bg', "Open a new background tab in the "
+                                          "existing window and activate it."),
                                ('tab-silent', "Open a new tab in the existing "
                                               "window without activating "
                                               "it."),
+                               ('tab-bg-silent', "Open a new background tab "
+                                                 "in the existing window "
+                                                 "without activating it."),
                                ('window', "Open in a new window."))
 
 

@@ -24,6 +24,8 @@ import sys
 import html
 import getpass
 import traceback
+import distutils.version  # pylint: disable=no-name-in-module,import-error
+# https://bitbucket.org/logilab/pylint/issue/73/
 
 from PyQt5.QtCore import pyqtSlot, Qt, QSize, qVersion
 from PyQt5.QtWidgets import (QDialog, QLabel, QTextEdit, QPushButton,
@@ -32,7 +34,7 @@ from PyQt5.QtWidgets import (QDialog, QLabel, QTextEdit, QPushButton,
 
 import qutebrowser
 from qutebrowser.utils import version, log, utils, objreg, qtutils
-from qutebrowser.misc import miscwidgets
+from qutebrowser.misc import miscwidgets, autoupdate, msgbox
 from qutebrowser.browser.network import pastebin
 from qutebrowser.config import config
 
@@ -82,7 +84,7 @@ def get_fatal_crash_dialog(debug, data):
     else:
         title = "qutebrowser was restarted after a fatal crash!"
         text = ("<b>qutebrowser was restarted after a fatal crash!</b><br/>"
-                "Unfortunately, this crash occured in Qt (the library "
+                "Unfortunately, this crash occurred in Qt (the library "
                 "qutebrowser uses), and your version ({}) is outdated - "
                 "Qt 5.4 or later is recommended. Unfortuntately Debian and "
                 "Ubuntu don't ship a newer version (yet?)...".format(
@@ -103,6 +105,7 @@ class _CrashDialog(QDialog):
         _url: Pastebin URL QLabel.
         _crash_info: A list of tuples with title and crash information.
         _paste_client: A PastebinClient instance to use.
+        _pypi_client: A PyPIVersionClient instance to use.
         _paste_text: The text to pastebin.
     """
 
@@ -125,6 +128,7 @@ class _CrashDialog(QDialog):
         self.resize(QSize(640, 600))
         self._vbox = QVBoxLayout(self)
         self._paste_client = pastebin.PastebinClient(self)
+        self._pypi_client = autoupdate.PyPIVersionClient(self)
         self._init_text()
 
         contact = QLabel("I'd like to be able to follow up with you, to keep "
@@ -293,9 +297,16 @@ class _CrashDialog(QDialog):
         self._btn_report.setEnabled(False)
         self._btn_cancel.setEnabled(False)
         self._btn_report.setText("Reporting...")
-        self._paste_client.success.connect(self.finish)
+        self._paste_client.success.connect(self.on_paste_success)
         self._paste_client.error.connect(self.show_error)
         self.report()
+
+    @pyqtSlot()
+    def on_paste_success(self):
+        """Get the newest version from PyPI when the paste is done."""
+        self._pypi_client.success.connect(self.on_version_success)
+        self._pypi_client.error.connect(self.on_version_error)
+        self._pypi_client.get_version()
 
     @pyqtSlot(str)
     def show_error(self, text):
@@ -307,6 +318,44 @@ class _CrashDialog(QDialog):
         error_dlg = ReportErrorDialog(text, self._paste_text, self)
         error_dlg.finished.connect(self.finish)
         error_dlg.show()
+
+    @pyqtSlot(str)
+    def on_version_success(self, newest):
+        """Called when the version was obtained from self._pypi_client.
+
+        Args:
+            newest: The newest version as a string.
+        """
+        # pylint: disable=no-member
+        # https://bitbucket.org/logilab/pylint/issue/73/
+        new_version = distutils.version.StrictVersion(newest)
+        cur_version = distutils.version.StrictVersion(qutebrowser.__version__)
+        lines = ['The report has been sent successfully. Thanks!']
+        if new_version > cur_version:
+            lines.append("<b>Note:</b> The newest available version is v{}, "
+                         "but you're currently running v{} - please "
+                         "update!".format(newest, qutebrowser.__version__))
+        text = '<br/><br/>'.join(lines)
+        self.hide()
+        msgbox.information(self, "Report successfully sent!", text,
+                           on_finished=self.finish, plain_text=False)
+
+    @pyqtSlot(str)
+    def on_version_error(self, msg):
+        """Called when the version was not obtained from self._pypi_client.
+
+        Args:
+            msg: The error message to show.
+        """
+        lines = ['The report has been sent successfully. Thanks!']
+        lines.append("There was an error while getting the newest version: "
+                     "{}. Please check for a new version on "
+                     "<a href=http://www.qutebrowser.org/>qutebrowser.org</a> "
+                     "by yourself.".format(msg))
+        text = '<br/><br/>'.join(lines)
+        self.hide()
+        msgbox.information(self, "Report successfully sent!", text,
+                           on_finished=self.finish, plain_text=False)
 
     @pyqtSlot()
     def finish(self):
@@ -403,12 +452,12 @@ class ExceptionCrashDialog(_CrashDialog):
 
 class FatalCrashDialog(_CrashDialog):
 
-    """Dialog which gets shown when a fatal error occured.
+    """Dialog which gets shown when a fatal error occurred.
 
     Attributes:
         _log: The log text to display.
-        _type: The type of error which occured.
-        _func: The function (top of the stack) in which the error occured.
+        _type: The type of error which occurred.
+        _func: The function (top of the stack) in which the error occurred.
         _chk_history: A checkbox for the user to decide if page history should
                       be sent.
     """

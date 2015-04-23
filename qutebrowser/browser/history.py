@@ -25,7 +25,7 @@ import collections
 from PyQt5.QtCore import pyqtSignal, QUrl
 from PyQt5.QtWebKit import QWebHistoryInterface
 
-from qutebrowser.utils import utils, objreg, standarddir
+from qutebrowser.utils import utils, objreg, standarddir, log
 from qutebrowser.config import config
 from qutebrowser.misc import lineparser
 
@@ -89,6 +89,11 @@ class WebHistory(QWebHistoryInterface):
                 if not data:
                     # empty line
                     continue
+                elif len(data) != 2:
+                    # other malformed line
+                    log.init.warning("Invalid history entry {!r}!".format(
+                        line))
+                    continue
                 atime, url = data
                 # This de-duplicates history entries; only the latest
                 # entry for each URL is kept. If you want to keep
@@ -132,6 +137,8 @@ class WebHistory(QWebHistoryInterface):
         Args:
             url_string: An url as string to add to the history.
         """
+        if not url_string:
+            return
         if not config.get('general', 'private-browsing'):
             entry = HistoryEntry(time.time(), url_string)
             self.item_about_to_be_added.emit(entry)
@@ -152,8 +159,12 @@ class WebHistory(QWebHistoryInterface):
         return url_string in self._history_dict
 
 
-def init():
-    """Initialize the web history."""
-    history = WebHistory()
+def init(parent=None):
+    """Initialize the web history.
+
+    Args:
+        parent: The parent to use for WebHistory.
+    """
+    history = WebHistory(parent)
     objreg.register('web-history', history)
     QWebHistoryInterface.setDefaultInterface(history)
