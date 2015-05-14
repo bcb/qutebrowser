@@ -157,6 +157,14 @@ class TestConfigParser:
             self.cfg.get('general', 'bar')  # pylint: disable=bad-config-call
 
 
+def keyconfig_deprecated_test_cases():
+    """Generator yielding test cases (command, rgx) for TestKeyConfigParser."""
+    for sect in configdata.KEY_DATA.values():
+        for command in sect:
+            for rgx, _repl in configdata.CHANGED_KEY_COMMANDS:
+                yield (command, rgx)
+
+
 class TestKeyConfigParser:
 
     """Test config.parsers.keyconf.KeyConfigParser."""
@@ -176,6 +184,44 @@ class TestKeyConfigParser:
         else:
             with pytest.raises(keyconf.KeyConfigError):
                 kcp._read_command(cmdline_test.cmd)
+
+    @pytest.mark.parametrize('command, rgx', keyconfig_deprecated_test_cases())
+    def test_default_config_no_deprecated(self, command, rgx):
+        """Make sure the default config contains no deprecated commands."""
+        assert rgx.match(command) is None
+
+    @pytest.mark.parametrize(
+        'old, new_expected',
+        [
+            ('open -t about:blank', 'open -t'),
+            ('open -w about:blank', 'open -w'),
+            ('open -b about:blank', 'open -b'),
+            ('open about:blank', None),
+            ('open -t example.com', None),
+            ('download-page', 'download'),
+            ('cancel-download', 'download-cancel'),
+            ('search ""', 'search'),
+            ("search ''", 'search'),
+            ('search "foo"', None),
+            ('set-cmd-text "foo bar"', 'set-cmd-text foo bar'),
+            ("set-cmd-text 'foo bar'", 'set-cmd-text foo bar'),
+            ('set-cmd-text foo bar', None),
+            ('set-cmd-text "foo bar "', 'set-cmd-text -s foo bar'),
+            ("set-cmd-text 'foo bar '", 'set-cmd-text -s foo bar'),
+            ('hint links rapid', 'hint --rapid links tab-bg'),
+            ('hint links rapid-win', 'hint --rapid links window'),
+        ]
+    )
+    def test_migrations(self, old, new_expected):
+        """Make sure deprecated commands get migrated correctly."""
+        if new_expected is None:
+            new_expected = old
+        new = old
+        for rgx, repl in configdata.CHANGED_KEY_COMMANDS:
+            if rgx.match(new):
+                new = rgx.sub(repl, new)
+                break
+        assert new == new_expected
 
 
 class TestDefaultConfig:

@@ -606,11 +606,11 @@ def data(readonly=False):
              "are not affected by this setting."),
 
             ('geolocation',
-             SettingValue(typ.NoAsk(), 'ask'),
+             SettingValue(typ.BoolAsk(), 'ask'),
              "Allow websites to request geolocations."),
 
             ('notifications',
-             SettingValue(typ.NoAsk(), 'ask'),
+             SettingValue(typ.BoolAsk(), 'ask'),
              "Allow websites to show notifications."),
 
             #('allow-java',
@@ -1097,7 +1097,7 @@ KEY_DATA = collections.OrderedDict([
     ])),
 
     ('normal', collections.OrderedDict([
-        ('search ""', ['<Escape>']),
+        ('search', ['<Escape>']),
         ('set-cmd-text -s :open', ['o']),
         ('set-cmd-text :open {url}', ['go']),
         ('set-cmd-text -s :open -t', ['O']),
@@ -1130,6 +1130,7 @@ KEY_DATA = collections.OrderedDict([
         ('hint all tab', ['F']),
         ('hint all window', ['wf']),
         ('hint all tab-bg', [';b']),
+        ('hint all tab-fg', [';f']),
         ('hint all hover', [';h']),
         ('hint images', [';i']),
         ('hint images tab', [';I']),
@@ -1139,8 +1140,8 @@ KEY_DATA = collections.OrderedDict([
         ('hint links fill ":open -b {hint-url}"', ['.o']),
         ('hint links yank', [';y']),
         ('hint links yank-primary', [';Y']),
-        ('hint links rapid', [';r']),
-        ('hint links rapid-win', [';R']),
+        ('hint --rapid links tab-bg', [';r']),
+        ('hint --rapid links window', [';R']),
         ('hint links download', [';d']),
         ('scroll -50 0', ['h']),
         ('scroll 0 50', ['j']),
@@ -1213,7 +1214,10 @@ KEY_DATA = collections.OrderedDict([
     ])),
 
     ('hint', collections.OrderedDict([
-        ('follow-hint', ['<Return>']),
+        ('follow-hint', ['<Return>', '<Ctrl-M>', '<Ctrl-J>']),
+        ('hint --rapid links tab-bg', ['<Ctrl-R>']),
+        ('hint links', ['<Ctrl-F>']),
+        ('hint all tab-bg', ['<Ctrl-B>']),
     ])),
 
     ('passthrough', {}),
@@ -1223,11 +1227,13 @@ KEY_DATA = collections.OrderedDict([
         ('command-history-next', ['<Ctrl-N>']),
         ('completion-item-prev', ['<Shift-Tab>', '<Up>']),
         ('completion-item-next', ['<Tab>', '<Down>']),
-        ('command-accept', ['<Return>', '<Ctrl-J>', '<Shift-Return>']),
+        ('command-accept', ['<Return>', '<Ctrl-J>', '<Shift-Return>',
+                            '<Ctrl-M>']),
     ])),
 
     ('prompt', collections.OrderedDict([
-        ('prompt-accept', ['<Return>', '<Ctrl-J>', '<Shift-Return>']),
+        ('prompt-accept', ['<Return>', '<Ctrl-J>', '<Shift-Return>',
+                           '<Ctrl-M>']),
         ('prompt-yes', ['y']),
         ('prompt-no', ['n']),
     ])),
@@ -1260,4 +1266,6 @@ CHANGED_KEY_COMMANDS = [
     (re.compile(r"^search ''$"), r'search'),
     (re.compile(r"""^set-cmd-text ['"](.*) ['"]$"""), r'set-cmd-text -s \1'),
     (re.compile(r"""^set-cmd-text ['"](.*)['"]$"""), r'set-cmd-text \1'),
+    (re.compile(r"^hint links rapid$"), r'hint --rapid links tab-bg'),
+    (re.compile(r"^hint links rapid-win$"), r'hint --rapid links window'),
 ]
