@@ -276,6 +276,10 @@ def data(readonly=False):
              SettingValue(typ.String(none_ok=True), ''),
              "Set the CSS media type."),
 
+            ('smooth-scrolling',
+             SettingValue(typ.Bool(), 'false'),
+             "Whether to enable smooth scrolling for webpages."),
+
             ('remove-finished-downloads',
              SettingValue(typ.Bool(), 'false'),
              "Whether to remove finished downloads automatically."),
@@ -605,6 +609,18 @@ def data(readonly=False):
              'Qt plugins with a mimetype such as "application/x-qt-plugin" '
              "are not affected by this setting."),
 
+            ('webgl',
+             SettingValue(typ.Bool(), 'true'),
+             "Enables or disables WebGL."),
+
+            ('css-regions',
+             SettingValue(typ.Bool(), 'true'),
+             "Enable or disable support for CSS regions."),
+
+            ('hyperlink-auditing',
+             SettingValue(typ.Bool(), 'false'),
+             "Enable or disable hyperlink auditing (<a ping>)."),
+
             ('geolocation',
              SettingValue(typ.BoolAsk(), 'ask'),
              "Allow websites to request geolocations."),
@@ -815,6 +831,15 @@ def data(readonly=False):
             ('statusbar.bg.insert',
              SettingValue(typ.QssColor(), 'darkgreen'),
              "Background color of the statusbar in insert mode."),
+
+            ('statusbar.bg.caret',
+             SettingValue(typ.QssColor(), 'purple'),
+             "Background color of the statusbar in caret mode."),
+
+            ('statusbar.bg.caret-selection',
+             SettingValue(typ.QssColor(), '#a12dff'),
+             "Background color of the statusbar in caret mode with a "
+             "selection"),
 
             ('statusbar.progress.bg',
              SettingValue(typ.QssColor(), 'white'),
@@ -1088,6 +1113,8 @@ KEY_SECTION_DESC = {
         " * `prompt-accept`: Confirm the entered value.\n"
         " * `prompt-yes`: Answer yes to a yes/no question.\n"
         " * `prompt-no`: Answer no to a yes/no question."),
+    'caret': (
+        ""),
 }
 
 
@@ -1143,16 +1170,17 @@ KEY_DATA = collections.OrderedDict([
         ('hint --rapid links tab-bg', [';r']),
         ('hint --rapid links window', [';R']),
         ('hint links download', [';d']),
-        ('scroll -50 0', ['h']),
-        ('scroll 0 50', ['j']),
-        ('scroll 0 -50', ['k']),
-        ('scroll 50 0', ['l']),
+        ('scroll left', ['h']),
+        ('scroll down', ['j']),
+        ('scroll up', ['k']),
+        ('scroll right', ['l']),
         ('undo', ['u', '<Ctrl-Shift-T>']),
         ('scroll-perc 0', ['gg']),
         ('scroll-perc', ['G']),
         ('search-next', ['n']),
         ('search-prev', ['N']),
         ('enter-mode insert', ['i']),
+        ('enter-mode caret', ['v']),
         ('yank', ['yy']),
         ('yank -s', ['yY']),
         ('yank -t', ['yt']),
@@ -1253,6 +1281,33 @@ KEY_DATA = collections.OrderedDict([
         ('rl-delete-char', ['<Ctrl-?>']),
         ('rl-backward-delete-char', ['<Ctrl-H>']),
     ])),
+
+    ('caret', collections.OrderedDict([
+        ('toggle-selection', ['v', '<Space>']),
+        ('drop-selection', ['<Ctrl-Space>']),
+        ('enter-mode normal', ['c']),
+        ('move-to-next-line', ['j']),
+        ('move-to-prev-line', ['k']),
+        ('move-to-next-char', ['l']),
+        ('move-to-prev-char', ['h']),
+        ('move-to-end-of-word', ['e']),
+        ('move-to-next-word', ['w']),
+        ('move-to-prev-word', ['b']),
+        ('move-to-start-of-next-block', [']']),
+        ('move-to-start-of-prev-block', ['[']),
+        ('move-to-end-of-next-block', ['}']),
+        ('move-to-end-of-prev-block', ['{']),
+        ('move-to-start-of-line', ['0']),
+        ('move-to-end-of-line', ['$']),
+        ('move-to-start-of-document', ['gg']),
+        ('move-to-end-of-document', ['G']),
+        ('yank-selected -p', ['Y']),
+        ('yank-selected', ['y', '<Return>', '<Ctrl-J>']),
+        ('scroll left', ['H']),
+        ('scroll down', ['J']),
+        ('scroll up', ['K']),
+        ('scroll right', ['L']),
+    ])),
 ])
 
 
@@ -1260,12 +1315,22 @@ KEY_DATA = collections.OrderedDict([
 
 CHANGED_KEY_COMMANDS = [
     (re.compile(r'^open -([twb]) about:blank$'), r'open -\1'),
+
     (re.compile(r'^download-page$'), r'download'),
     (re.compile(r'^cancel-download$'), r'download-cancel'),
+
     (re.compile(r'^search ""$'), r'search'),
     (re.compile(r"^search ''$"), r'search'),
+
     (re.compile(r"""^set-cmd-text ['"](.*) ['"]$"""), r'set-cmd-text -s \1'),
     (re.compile(r"""^set-cmd-text ['"](.*)['"]$"""), r'set-cmd-text \1'),
+
     (re.compile(r"^hint links rapid$"), r'hint --rapid links tab-bg'),
     (re.compile(r"^hint links rapid-win$"), r'hint --rapid links window'),
+
+    (re.compile(r'^scroll -50 0$'), r'scroll left'),
+    (re.compile(r'^scroll 0 50$'), r'scroll down'),
+    (re.compile(r'^scroll 0 -50$'), r'scroll up'),
+    (re.compile(r'^scroll 50 0$'), r'scroll right'),
+    (re.compile(r'^scroll ([-\d]+ [-\d]+)$'), r'scroll-px \1'),
 ]
