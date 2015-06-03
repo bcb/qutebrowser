@@ -139,6 +139,8 @@ Contributors, sorted by the number of commits in descending order:
 * Joel Torstensson
 * Claude
 * Artur Shaik
+* Antoni Boucher
+* Martin Tournoij
 * ZDarian
 * Peter Vilim
 * John ShaggyTwoDope Jenkins
@@ -150,6 +152,7 @@ Contributors, sorted by the number of commits in descending order:
 * Error 800
 * Brian Jackson
 * sbinix
+* Tobias Patzl
 * Johannes Altmanninger
 * Samir Benmendil
 * Regina Hug
