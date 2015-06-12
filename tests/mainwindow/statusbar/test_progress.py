@@ -39,14 +39,12 @@ def progress_widget(qtbot, monkeypatch, config_stub):
         'qutebrowser.mainwindow.statusbar.progress.style.config', config_stub)
     widget = Progress()
     qtbot.add_widget(widget)
+    widget.setGeometry(200, 200, 200, 200)
     assert not widget.isVisible()
     assert not widget.isTextVisible()
     return widget
 
 
-@pytest.mark.xfail(
-    reason='Blacklisted because it could cause random segfaults - see '
-           'https://github.com/hackebrot/qutebrowser/issues/22', run=False)
 def test_load_started(progress_widget):
     """Ensure the Progress widget reacts properly when the page starts loading.
 

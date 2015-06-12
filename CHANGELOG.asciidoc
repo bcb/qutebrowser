@@ -35,9 +35,12 @@ Added
 - New setting `tabs -> mousewheel-tab-switching` to control mousewheel behavior on the tab bar.
 - New arguments `--top-navigate` and `--bottom-navigate` (`-t`/`-b`) for `:scroll-page` to specify a navigation action (e.g. automatically go to the next page when arriving at the bottom).
 - New flag `-d`/`--detach` for `:spawn` to detach the spawned process so it's not closed when qutebrowser is.
+- New flag `-v`/`--verbose` for `:spawn` to print informations when the process started/exited successfully.
 - New (hidden) command `:follow-selected` (bound to `Enter`/`Ctrl-Enter` by default) to follow the link which is currently selected (e.g. after searching via `/`).
 - New setting `ui -> modal-js-dialog` to use the standard modal dialogs for javascript questions instead of using the statusbar.
 - New setting `colors -> webpage.bg` to set the background color to use for websites which don't set one.
+- New (hidden) command `:clear-keychain` to clear a partially entered keychain (bound to `<Escape>` by default, in addition to clearing search).
+- Many new color settings (foreground setting for every background setting).
 
 Changed
 ~~~~~~~
@@ -49,6 +52,8 @@ Changed
 - `<Ctrl-M>` and numpad-enter are now bound by default for bindings where `<Return>` was bound.
 - `:hint tab` and `F` now respect the `background-tabs` setting. To enforce a foreground tab (what `F` did before), use `:hint tab-fg` or `;f`.
 - `:scroll` now takes a direction argument (`up`/`down`/`left`/`right`/`top`/`bottom`/`page-up`/`page-down`) instead of two pixel arguments (`dx`/`dy`). The old form still works but is deprecated.
+- The `ui -> user-stylesheet` setting now also takes file paths relative to the config directory.
+- The `content -> cookies-accept` setting now has new `no-3rdparty` (default) and `no-unknown-3rdparty` values to block third-party cookies. The `default` value got renamed to `all`.
 
 Deprecated
 ~~~~~~~~~~
@@ -59,6 +64,7 @@ Removed
 ~~~~~~~
 
 - The `--no-crash-dialog` argument which was intended for debugging only was removed as it's replaced by `--no-err-windows` which suppresses all error windows.
+- Support for Qt installations without SSL support was dropped.
 
 Fixed
 ~~~~~
@@ -81,6 +87,7 @@ Fixed
 - Fixed handling of keybindings containing Ctrl/Meta on OS X.
 - Fixed crash when downloading an URL without filename (e.g. magnet links) via "Save as...".
 - Fixed exception when starting qutebrowser with `:set` as argument.
+- Fixed horrible completion performance when the `shrink` option was set.
 
 https://github.com/The-Compiler/qutebrowser/releases/tag/v0.2.1[v0.2.1]
 -----------------------------------------------------------------------
