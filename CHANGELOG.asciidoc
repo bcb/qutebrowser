@@ -41,6 +41,7 @@ Added
 - New setting `colors -> webpage.bg` to set the background color to use for websites which don't set one.
 - New (hidden) command `:clear-keychain` to clear a partially entered keychain (bound to `<Escape>` by default, in addition to clearing search).
 - Many new color settings (foreground setting for every background setting).
+- New command `:jseval` to run a javascript snippet on the current page.
 
 Changed
 ~~~~~~~
@@ -54,6 +55,8 @@ Changed
 - `:scroll` now takes a direction argument (`up`/`down`/`left`/`right`/`top`/`bottom`/`page-up`/`page-down`) instead of two pixel arguments (`dx`/`dy`). The old form still works but is deprecated.
 - The `ui -> user-stylesheet` setting now also takes file paths relative to the config directory.
 - The `content -> cookies-accept` setting now has new `no-3rdparty` (default) and `no-unknown-3rdparty` values to block third-party cookies. The `default` value got renamed to `all`.
+- Improved startup time by reading the webpage history while qutebrowser is open.
+- The way `:spawn` splits its commandline has been changed slightly to allow commands with flags.
 
 Deprecated
 ~~~~~~~~~~
