@@ -111,10 +111,19 @@ class TestGitStr:
         commit_file_mock.side_effect = OSError
         assert version._git_str() is None
 
+    @pytest.mark.skipif(getattr(sys, 'frozen', False),
+                        reason="Can't be executed when frozen!")
     def test_normal_successful(self, git_str_subprocess_fake):
         """Test with git returning a successful result."""
         git_str_subprocess_fake.retval = 'c0ffeebabe'
         assert version._git_str() == 'c0ffeebabe'
+
+    @pytest.mark.skipif(not getattr(sys, 'frozen', False),
+                        reason="Can only executed when frozen!")
+    def test_normal_successful_frozen(self, git_str_subprocess_fake):
+        """Test with git returning a successful result."""
+        # The value is defined in scripts/freeze_tests.py.
+        assert version._git_str() == 'fake-frozen-git-commit'
 
     def test_normal_error(self, commit_file_mock, git_str_subprocess_fake):
         """Test without repo (but git-commit-id)."""
@@ -130,6 +139,8 @@ class TestGitStr:
                      side_effect=OSError)
         assert version._git_str() is None
 
+    @pytest.mark.skipif(getattr(sys, 'frozen', False),
+                        reason="Can't be executed when frozen!")
     def test_normal_path_nofile(self, monkeypatch, caplog,
                                 git_str_subprocess_fake, commit_file_mock):
         """Test with undefined __file__ but available git-commit-id."""
@@ -596,38 +607,49 @@ class TestVersion:
         lines = version.version().splitlines()
         assert lines[4] == 'PyQt: 78.9'
 
+    def test_style(self, monkeypatch):
+        """Test the style in the output."""
+        lines = version.version().splitlines()
+        assert lines[5].startswith('Style: ')
+
+    def test_desktop_environment(self, monkeypatch):
+        """Test the desktop environment in the output."""
+        monkeypatch.setenv('DESKTOP_SESSION', 'Blah')
+        lines = version.version().splitlines()
+        assert lines[6] == 'Desktop: Blah'
+
     def test_module_versions(self, monkeypatch):
         """Test module versions in the output."""
         monkeypatch.setattr('qutebrowser.utils.version._module_versions',
                             lambda: ['Hello', 'World'])
         lines = version.version().splitlines()
-        assert (lines[5], lines[6]) == ('Hello', 'World')
+        assert (lines[7], lines[8]) == ('Hello', 'World')
 
     def test_webkit_version(self, monkeypatch):
         """Test the webkit version in the output."""
         monkeypatch.setattr('qutebrowser.utils.version.qWebKitVersion',
                             lambda: '567.1')
         lines = version.version().splitlines()
-        assert lines[5] == 'Webkit: 567.1'
+        assert lines[7] == 'Webkit: 567.1'
 
     def test_harfbuzz_none(self, monkeypatch):
         """Test harfbuzz output with QT_HARFBUZZ unset."""
         monkeypatch.delenv('QT_HARFBUZZ', raising=False)
         lines = version.version().splitlines()
-        assert lines[6] == 'Harfbuzz: system'
+        assert lines[8] == 'Harfbuzz: system'
 
     def test_harfbuzz_set(self, monkeypatch):
         """Test harfbuzz output with QT_HARFBUZZ set."""
         monkeypatch.setenv('QT_HARFBUZZ', 'new')
         lines = version.version().splitlines()
-        assert lines[6] == 'Harfbuzz: new'
+        assert lines[8] == 'Harfbuzz: new'
 
     def test_ssl(self, monkeypatch):
         """Test SSL version in the output."""
         monkeypatch.setattr('qutebrowser.utils.version.QSslSocket',
                             FakeQSslSocket('1.0.1'))
         lines = version.version().splitlines()
-        assert lines[7] == 'SSL: 1.0.1'
+        assert lines[9] == 'SSL: 1.0.1'
 
     @pytest.mark.parametrize('frozen, expected', [(True, 'Frozen: True'),
                                                   (False, 'Frozen: False')])
@@ -638,7 +660,7 @@ class TestVersion:
         else:
             monkeypatch.delattr(sys, 'frozen', raising=False)
         lines = version.version().splitlines()
-        assert lines[9] == expected
+        assert lines[11] == expected
 
     def test_platform(self, monkeypatch):
         """Test platform in the version output."""
@@ -647,11 +669,11 @@ class TestVersion:
         monkeypatch.setattr('qutebrowser.utils.version.platform.architecture',
                             lambda: ('64bit', ''))
         lines = version.version().splitlines()
-        assert lines[10] == 'Platform: toaster, 64bit'
+        assert lines[12] == 'Platform: toaster, 64bit'
 
     def test_os_info(self, monkeypatch):
         """Test OS info in the output."""
         monkeypatch.setattr('qutebrowser.utils.version._os_info',
                             lambda: ['Hello', 'World'])
         lines = version.version().splitlines()
-        assert (lines[11], lines[12]) == ('Hello', 'World')
+        assert (lines[13], lines[14]) == ('Hello', 'World')

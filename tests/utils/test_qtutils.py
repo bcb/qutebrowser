@@ -339,7 +339,7 @@ class TestSerializeStream:
 
         assert src_obj == dest_obj
 
-    @pytest.mark.qt_log_ignore('^QIODevice::write: ReadOnly device')
+    @pytest.mark.qt_log_ignore('^QIODevice::write.*: ReadOnly device')
     def test_serialize_readonly_stream(self):
         """Test serialize_stream with a read-only stream."""
         data = QByteArray()
@@ -349,7 +349,7 @@ class TestSerializeStream:
         assert str(excinfo.value) == ("The data stream cannot write to the "
                                       "underlying device.")
 
-    @pytest.mark.qt_log_ignore('QIODevice::read: WriteOnly device')
+    @pytest.mark.qt_log_ignore('QIODevice::read.*: WriteOnly device')
     def test_deserialize_writeonly_stream(self):
         """Test deserialize_stream with a write-only stream."""
         data = QByteArray()
@@ -757,6 +757,8 @@ class TestPyQIODevice:
         with pytest.raises(io.UnsupportedOperation):
             pyqiodev.seek(0, whence)
 
+    @pytest.mark.skipif(getattr(sys, 'frozen', False),
+                        reason="Can't be executed when frozen.")
     def test_qprocess(self):
         """Test PyQIODevice with a QProcess which is non-sequential.
 
