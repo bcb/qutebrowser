@@ -23,7 +23,6 @@
 
 import os
 import os.path
-import sys
 import types
 import collections
 import logging
@@ -101,8 +100,7 @@ class TestWritableLocation:
         assert '\\' in loc
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"),
-                    reason="requires Linux")
+@pytest.mark.linux
 @pytest.mark.usefixtures('no_cachedir_tag')
 class TestGetStandardDirLinux:
 
@@ -145,8 +143,7 @@ class TestGetStandardDirLinux:
         assert standarddir.cache() == expected
 
 
-@pytest.mark.skipif(not sys.platform.startswith("win"),
-                    reason="requires Windows")
+@pytest.mark.windows
 @pytest.mark.usefixtures('no_cachedir_tag')
 class TestGetStandardDirWindows:
 

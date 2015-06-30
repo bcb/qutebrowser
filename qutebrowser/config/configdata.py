@@ -208,7 +208,7 @@ def data(readonly=False):
              "be used."),
 
             ('new-instance-open-target',
-             SettingValue(typ.NewInstanceOpenTarget(), 'window'),
+             SettingValue(typ.NewInstanceOpenTarget(), 'tab'),
              "How to open links in an existing instance if a new one is "
              "launched."),
 
@@ -352,6 +352,10 @@ def data(readonly=False):
         )),
 
         ('completion', sect.KeyValue(
+            ('auto-open',
+             SettingValue(typ.Bool(), 'true'),
+             "Automatically open completion when typing."),
+
             ('download-path-suggestion',
              SettingValue(typ.DownloadPathSuggestion(), 'path'),
              "What to display in the download filename input."),

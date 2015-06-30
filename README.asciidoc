@@ -170,6 +170,7 @@ Contributors, sorted by the number of commits in descending order:
 * HalosGhost
 * Gregor Pohl
 * Eivind Uggedal
+* Arseniy Seroka
 * Andreas Fischer
 // QUTE_AUTHORS_END
 
@@ -178,8 +179,8 @@ The following people have contributed graphics:
 * WOFall (icon)
 * regines (key binding cheatsheet)
 
-Thanks / Similiar projects
---------------------------
+Thanks / Similar projects
+-------------------------
 
 Many projects with a similar goal as qutebrowser exist:
 
