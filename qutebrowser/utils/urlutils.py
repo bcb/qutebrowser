@@ -153,15 +153,15 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
         A target QUrl to a search page or the original URL.
     """
     expanded = os.path.expanduser(urlstr)
-    if relative and cwd:
+    if os.path.isabs(expanded):
+        path = expanded
+    elif relative and cwd:
         path = os.path.join(cwd, expanded)
     elif relative:
         try:
             path = os.path.abspath(expanded)
         except OSError:
             path = None
-    elif os.path.isabs(expanded):
-        path = expanded
     else:
         path = None
 
@@ -266,7 +266,7 @@ def is_url(urlstr):
     elif autosearch == 'naive':
         log.url.debug("Checking via naive check")
         url = _is_url_naive(urlstr)
-    else:
+    else:  # pragma: no cover
         raise ValueError("Invalid autosearch value")
     log.url.debug("url = {}".format(url))
     return url
