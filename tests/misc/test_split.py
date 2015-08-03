@@ -114,15 +114,14 @@ def _parse_split_test_data_str():
     """
     tuple_class = collections.namedtuple('TestCase', 'input, keep, no_keep')
 
-    result = []
     for line in test_data_str.splitlines():
         if not line:
             continue
         data = line.split('/')
         item = tuple_class(input=data[0], keep=data[1].split('|'),
                            no_keep=data[2].split('|'))
-        result.append(item)
-    return result
+        yield item
+    yield tuple_class(input='', keep=[], no_keep=[])
 
 
 class TestSplit:
@@ -183,3 +182,8 @@ class TestSimpleSplit:
     def test_split_keep(self, test, expected):
         """Test splitting with keep=True."""
         assert split.simple_split(test, keep=True) == expected
+
+    def test_maxsplit_0_keep(self):
+        """Test special case with maxsplit=0 and keep=True."""
+        s = "foo  bar"
+        assert split.simple_split(s, keep=True, maxsplit=0) == [s]

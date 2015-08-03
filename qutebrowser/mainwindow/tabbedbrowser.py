@@ -23,7 +23,7 @@ import functools
 import collections
 
 from PyQt5.QtWidgets import QSizePolicy
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, QSize, QTimer, QUrl
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QTimer, QUrl
 from PyQt5.QtGui import QIcon
 
 from qutebrowser.config import config
@@ -108,9 +108,6 @@ class TabbedBrowser(tabwidget.TabWidget):
         self._undo_stack = []
         self._filter = signalfilter.SignalFilter(win_id, self)
         self._now_focused = None
-        # FIXME adjust this to font size
-        # https://github.com/The-Compiler/qutebrowser/issues/119
-        self.setIconSize(QSize(12, 12))
         objreg.get('config').changed.connect(self.update_favicons)
         objreg.get('config').changed.connect(self.update_window_title)
         objreg.get('config').changed.connect(self.update_tab_titles)
@@ -234,9 +231,14 @@ class TabbedBrowser(tabwidget.TabWidget):
             tab: The QWebView to be closed.
         """
         last_close = config.get('tabs', 'last-close')
+        count = self.count()
+
+        if last_close == 'ignore' and count == 1:
+            return
+
         self._remove_tab(tab)
 
-        if self.count() == 0:
+        if count == 1:  # We just closed the last tab above.
             if last_close == 'close':
                 self.close_window.emit()
             elif last_close == 'blank':

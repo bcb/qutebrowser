@@ -271,7 +271,7 @@ def data(readonly=False):
              "page."),
 
             ('user-stylesheet',
-             SettingValue(typ.UserStyleSheet(),
+             SettingValue(typ.UserStyleSheet(none_ok=True),
                           '::-webkit-scrollbar { width: 0px; height: 0px; }'),
              "User stylesheet to use (absolute filename, filename relative to "
              "the config directory or CSS string). Will expand environment "
@@ -325,6 +325,10 @@ def data(readonly=False):
             ('accept-language',
              SettingValue(typ.String(none_ok=True), 'en-US,en'),
              "Value to send in the `accept-language` header."),
+
+            ('referer-header',
+             SettingValue(typ.Referer(), 'same-domain'),
+             "Send the Referer header"),
 
             ('user-agent',
              SettingValue(typ.UserAgent(none_ok=True), ''),
@@ -475,13 +479,14 @@ def data(readonly=False):
              SettingValue(typ.LastClose(), 'ignore'),
              "Behavior when the last tab is closed."),
 
-            ('hide-auto',
-             SettingValue(typ.Bool(), 'false'),
-             "Hide the tab bar if only one tab is open."),
+            ('show',
+             SettingValue(typ.TabBarShow(), 'always'),
+             "When to show the tab bar"),
 
-            ('hide-always',
-             SettingValue(typ.Bool(), 'false'),
-             "Always hide the tab bar."),
+            ('show-switching-delay',
+             SettingValue(typ.Int(), '800'),
+             "Time to show the tab bar before hiding it when tabs->show is "
+             "set to 'switching'."),
 
             ('wrap',
              SettingValue(typ.Bool(), 'true'),
@@ -513,10 +518,6 @@ def data(readonly=False):
              SettingValue(typ.Int(minval=0), '3'),
              "Width of the progress indicator (0 to disable)."),
 
-            ('indicator-space',
-             SettingValue(typ.Int(minval=0), '3'),
-             "Spacing between tab edge and indicator."),
-
             ('tabs-are-windows',
              SettingValue(typ.Bool(), 'false'),
              "Whether to open windows instead of tabs."),
@@ -539,6 +540,14 @@ def data(readonly=False):
              SettingValue(typ.Bool(), 'true'),
              "Switch between tabs using the mouse wheel."),
 
+            ('padding',
+             SettingValue(typ.Padding(), '0,0,5,5'),
+             "Padding for tabs (top, bottom, left, right)."),
+
+            ('indicator-padding',
+             SettingValue(typ.Padding(), '2,2,0,4'),
+             "Padding for indicators (top, bottom, left, right)."),
+
             readonly=readonly
         )),
 
@@ -548,6 +557,10 @@ def data(readonly=False):
              "The directory to save downloads to. An empty value selects a "
              "sensible os-specific default. Will expand environment "
              "variables."),
+
+            ('remember-download-directory',
+             SettingValue(typ.Bool(), 'true'),
+             "Whether to remember the last used download directory."),
 
             ('maximum-pages-in-cache',
              SettingValue(
@@ -562,7 +575,8 @@ def data(readonly=False):
 
             ('object-cache-capacities',
              SettingValue(
-                 typ.WebKitBytesList(length=3, maxsize=MAXVALS['int']), ''),
+                 typ.WebKitBytesList(length=3, maxsize=MAXVALS['int'],
+                                     none_ok=True), ''),
              "The capacities for the global memory cache for dead objects "
              "such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, "
              "cacheMaxDead, totalCapacity.\n\n"
@@ -575,11 +589,13 @@ def data(readonly=False):
              "that the cache should consume *overall*."),
 
             ('offline-storage-default-quota',
-             SettingValue(typ.WebKitBytes(maxsize=MAXVALS['int64']), ''),
+             SettingValue(typ.WebKitBytes(maxsize=MAXVALS['int64'],
+                                          none_ok=True), ''),
              "Default quota for new offline storage databases."),
 
             ('offline-web-application-cache-quota',
-             SettingValue(typ.WebKitBytes(maxsize=MAXVALS['int64']), ''),
+             SettingValue(typ.WebKitBytes(maxsize=MAXVALS['int64'],
+                                          none_ok=True), ''),
              "Quota for the offline web application cache."),
 
             ('offline-storage-database',
@@ -1271,6 +1287,10 @@ KEY_DATA = collections.OrderedDict([
         ('set-cmd-text -s :quickmark-load', ['b']),
         ('set-cmd-text -s :quickmark-load -t', ['B']),
         ('set-cmd-text -s :quickmark-load -w', ['wb']),
+        ('bookmark-add', ['M']),
+        ('set-cmd-text -s :bookmark-load', ['gb']),
+        ('set-cmd-text -s :bookmark-load -t', ['gB']),
+        ('set-cmd-text -s :bookmark-load -w', ['wB']),
         ('save', ['sf']),
         ('set-cmd-text -s :set', ['ss']),
         ('set-cmd-text -s :set -t', ['sl']),
@@ -1333,6 +1353,7 @@ KEY_DATA = collections.OrderedDict([
         ('command-history-next', ['<Ctrl-N>']),
         ('completion-item-prev', ['<Shift-Tab>', '<Up>']),
         ('completion-item-next', ['<Tab>', '<Down>']),
+        ('completion-item-del', ['<Ctrl-D>']),
         ('command-accept', RETURN_KEYS),
     ])),
 

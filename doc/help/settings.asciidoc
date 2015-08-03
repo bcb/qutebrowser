@@ -54,6 +54,7 @@
 |Setting|Description
 |<<network-do-not-track,do-not-track>>|Value to send in the `DNT` header.
 |<<network-accept-language,accept-language>>|Value to send in the `accept-language` header.
+|<<network-referer-header,referer-header>>|Send the Referer header
 |<<network-user-agent,user-agent>>|User agent to send. Empty to send the default.
 |<<network-proxy,proxy>>|The proxy to use.
 |<<network-proxy-dns-requests,proxy-dns-requests>>|Whether to send DNS requests over the configured proxy.
@@ -101,8 +102,8 @@
 |<<tabs-new-tab-position,new-tab-position>>|How new tabs are positioned.
 |<<tabs-new-tab-position-explicit,new-tab-position-explicit>>|How new tabs opened explicitly are positioned.
 |<<tabs-last-close,last-close>>|Behavior when the last tab is closed.
-|<<tabs-hide-auto,hide-auto>>|Hide the tab bar if only one tab is open.
-|<<tabs-hide-always,hide-always>>|Always hide the tab bar.
+|<<tabs-show,show>>|When to show the tab bar
+|<<tabs-show-switching-delay,show-switching-delay>>|Time to show the tab bar before hiding it when tabs->show is set to 'switching'.
 |<<tabs-wrap,wrap>>|Whether to wrap when changing tabs.
 |<<tabs-movable,movable>>|Whether tabs should be movable.
 |<<tabs-close-mouse-button,close-mouse-button>>|On which mouse button to close tabs.
@@ -110,10 +111,11 @@
 |<<tabs-show-favicons,show-favicons>>|Whether to show favicons in the tab bar.
 |<<tabs-width,width>>|The width of the tab bar if it's vertical, in px or as percentage of the window.
 |<<tabs-indicator-width,indicator-width>>|Width of the progress indicator (0 to disable).
-|<<tabs-indicator-space,indicator-space>>|Spacing between tab edge and indicator.
 |<<tabs-tabs-are-windows,tabs-are-windows>>|Whether to open windows instead of tabs.
 |<<tabs-title-format,title-format>>|The format to use for the tab title. The following placeholders are defined:
 |<<tabs-mousewheel-tab-switching,mousewheel-tab-switching>>|Switch between tabs using the mouse wheel.
+|<<tabs-padding,padding>>|Padding for tabs (top, bottom, left, right).
+|<<tabs-indicator-padding,indicator-padding>>|Padding for indicators (top, bottom, left, right).
 |==============
 
 .Quick reference for section ``storage''
@@ -121,6 +123,7 @@
 |==============
 |Setting|Description
 |<<storage-download-directory,download-directory>>|The directory to save downloads to. An empty value selects a sensible os-specific default. Will expand environment variables.
+|<<storage-remember-download-directory,remember-download-directory>>|Whether to remember the last used download directory.
 |<<storage-maximum-pages-in-cache,maximum-pages-in-cache>>|The maximum number of pages to hold in the global memory page cache.
 |<<storage-object-cache-capacities,object-cache-capacities>>|The capacities for the global memory cache for dead objects such as stylesheets or scripts. Syntax: cacheMinDeadCapacity, cacheMaxDead, totalCapacity.
 |<<storage-offline-storage-default-quota,offline-storage-default-quota>>|Default quota for new offline storage databases.
@@ -639,6 +642,18 @@ Value to send in the `accept-language` header.
 
 Default: +pass:[en-US,en]+
 
+[[network-referer-header]]
+=== referer-header
+Send the Referer header
+
+Valid values:
+
+ * +always+: Always send.
+ * +never+: Never send; this is not recommended, as some sites may break.
+ * +same-domain+: Only send for the same domain. This will still protect your privacy, but shouldn't break any sites.
+
+Default: +pass:[same-domain]+
+
 [[network-user-agent]]
 === user-agent
 User agent to send. Empty to send the default.
@@ -946,27 +961,24 @@ Valid values:
 
 Default: +pass:[ignore]+
 
-[[tabs-hide-auto]]
-=== hide-auto
-Hide the tab bar if only one tab is open.
+[[tabs-show]]
+=== show
+When to show the tab bar
 
 Valid values:
 
- * +true+
- * +false+
+ * +always+: Always show the tab bar.
+ * +never+: Always hide the tab bar.
+ * +multiple+: Hide the tab bar if only one tab is open.
+ * +switching+: Show the tab bar when switching tabs.
 
-Default: +pass:[false]+
+Default: +pass:[always]+
 
-[[tabs-hide-always]]
-=== hide-always
-Always hide the tab bar.
+[[tabs-show-switching-delay]]
+=== show-switching-delay
+Time to show the tab bar before hiding it when tabs->show is set to 'switching'.
 
-Valid values:
-
- * +true+
- * +false+
-
-Default: +pass:[false]+
+Default: +pass:[800]+
 
 [[tabs-wrap]]
 === wrap
@@ -1038,12 +1050,6 @@ Width of the progress indicator (0 to disable).
 
 Default: +pass:[3]+
 
-[[tabs-indicator-space]]
-=== indicator-space
-Spacing between tab edge and indicator.
-
-Default: +pass:[3]+
-
 [[tabs-tabs-are-windows]]
 === tabs-are-windows
 Whether to open windows instead of tabs.
@@ -1079,6 +1085,18 @@ Valid values:
 
 Default: +pass:[true]+
 
+[[tabs-padding]]
+=== padding
+Padding for tabs (top, bottom, left, right).
+
+Default: +pass:[0,0,5,5]+
+
+[[tabs-indicator-padding]]
+=== indicator-padding
+Padding for indicators (top, bottom, left, right).
+
+Default: +pass:[2,2,0,4]+
+
 == storage
 Settings related to cache and storage.
 
@@ -1087,6 +1105,17 @@ Settings related to cache and storage.
 The directory to save downloads to. An empty value selects a sensible os-specific default. Will expand environment variables.
 
 Default: empty
+
+[[storage-remember-download-directory]]
+=== remember-download-directory
+Whether to remember the last used download directory.
+
+Valid values:
+
+ * +true+
+ * +false+
+
+Default: +pass:[true]+
 
 [[storage-maximum-pages-in-cache]]
 === maximum-pages-in-cache

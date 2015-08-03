@@ -17,26 +17,24 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""The tab widget used for TabbedBrowser from browser.py.
+"""The tab widget used for TabbedBrowser from browser.py."""
 
-Module attributes:
-    PM_TabBarPadding: The PixelMetric value for TabBarStyle to get the padding
-                      between items.
-"""
-
+import collections
 import functools
+import math
 
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QSize, QRect, QPoint, QTimer
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QSize, QRect, QTimer
 from PyQt5.QtWidgets import (QTabWidget, QTabBar, QSizePolicy, QCommonStyle,
                              QStyle, QStylePainter, QStyleOptionTab)
 from PyQt5.QtGui import QIcon, QPalette, QColor
 
-from qutebrowser.utils import qtutils, objreg, utils
+from qutebrowser.utils import qtutils, objreg, utils, usertypes
 from qutebrowser.config import config
 from qutebrowser.browser import webview
 
 
-PM_TabBarPadding = QStyle.PM_CustomBase
+PixelMetrics = usertypes.enum('PixelMetrics', ['icon_padding'],
+                              start=QStyle.PM_CustomBase, is_int=True)
 
 
 class TabWidget(QTabWidget):
@@ -196,6 +194,7 @@ class TabWidget(QTabWidget):
     @pyqtSlot(int)
     def emit_tab_index_changed(self, index):
         """Emit the tab_index_changed signal if the current tab changed."""
+        self.tabBar().on_change()
         self.tab_index_changed.emit(index, self.count())
 
 
@@ -222,32 +221,47 @@ class TabBar(QTabBar):
         config_obj = objreg.get('config')
         config_obj.changed.connect(self.set_font)
         self.vertical = False
+        self._auto_hide_timer = QTimer()
+        self._auto_hide_timer.setSingleShot(True)
+        self._auto_hide_timer.setInterval(
+            config.get('tabs', 'show-switching-delay'))
+        self._auto_hide_timer.timeout.connect(self._tabhide)
         self.setAutoFillBackground(True)
         self.set_colors()
         config_obj.changed.connect(self.set_colors)
         QTimer.singleShot(0, self._tabhide)
-        config_obj.changed.connect(self.autohide)
-        config_obj.changed.connect(self.alwayshide)
         config_obj.changed.connect(self.on_tab_colors_changed)
+        config_obj.changed.connect(self.on_show_switching_delay_changed)
+        config_obj.changed.connect(self.tabs_show)
 
     def __repr__(self):
         return utils.get_repr(self, count=self.count())
 
-    @config.change_filter('tabs', 'hide-auto')
-    def autohide(self):
-        """Hide tab bar if needed when tabs->hide-auto got changed."""
+    @config.change_filter('tabs', 'show')
+    def tabs_show(self):
+        """Hide or show tab bar if needed when tabs->show got changed."""
         self._tabhide()
 
-    @config.change_filter('tabs', 'hide-always')
-    def alwayshide(self):
-        """Hide tab bar if needed when tabs->hide-always got changed."""
-        self._tabhide()
+    @config.change_filter('tabs', 'show-switching-delay')
+    def on_show_switching_delay_changed(self):
+        """Set timer interval when tabs->show-switching-delay got changed."""
+        self._auto_hide_timer.setInterval(
+            config.get('tabs', 'show-switching-delay'))
+
+    def on_change(self):
+        """Show tab bar when current tab got changed."""
+        show = config.get('tabs', 'show')
+        if show == 'switching':
+            self.show()
+            self._auto_hide_timer.start()
 
     def _tabhide(self):
         """Hide the tab bar if needed."""
-        hide_auto = config.get('tabs', 'hide-auto')
-        hide_always = config.get('tabs', 'hide-always')
-        if hide_always or (hide_auto and self.count() == 1):
+        show = config.get('tabs', 'show')
+        show_never = show == 'never'
+        switching = show == 'switching'
+        multiple = show == 'multiple'
+        if show_never or (multiple and self.count() == 1) or switching:
             self.hide()
         else:
             self.show()
@@ -296,6 +310,13 @@ class TabBar(QTabBar):
         """Set the tab bar font."""
         self.setFont(config.get('fonts', 'tabbar'))
 
+    def resizeEvent(self, e):
+        """Set the favicon size to the tabbar size minus some padding."""
+        height = e.size().height()
+        if height != 0 and e.oldSize().height() != height:
+            height = math.ceil(height - height / 7)
+            self.setIconSize(QSize(height, height))
+
     @config.change_filter('colors', 'tabs.bg.bar')
     def set_colors(self):
         """Set the tab bar colors."""
@@ -331,22 +352,21 @@ class TabBar(QTabBar):
             A QSize.
         """
         icon = self.tabIcon(index)
-        padding_count = 2
+        padding = config.get('tabs', 'padding')
+        padding_h = padding.left + padding.right
+        padding_v = padding.top + padding.bottom
         if icon.isNull():
             icon_size = QSize(0, 0)
         else:
             extent = self.style().pixelMetric(QStyle.PM_TabBarIconSize, None,
                                               self)
             icon_size = icon.actualSize(QSize(extent, extent))
-            padding_count += 1
+            padding_h += self.style().pixelMetric(
+                PixelMetrics.icon_padding, None, self)
         indicator_width = config.get('tabs', 'indicator-width')
-        if indicator_width != 0:
-            indicator_width += config.get('tabs', 'indicator-space')
-        padding_width = self.style().pixelMetric(PM_TabBarPadding, None, self)
-        height = self.fontMetrics().height()
-        width = (self.fontMetrics().width('\u2026') +
-                 icon_size.width() + padding_count * padding_width +
-                 indicator_width)
+        height = self.fontMetrics().height() + padding_v
+        width = (self.fontMetrics().width('\u2026') + icon_size.width() +
+                 padding_h + indicator_width)
         return QSize(width, height)
 
     def tabSizeHint(self, index):
@@ -361,7 +381,7 @@ class TabBar(QTabBar):
             A QSize.
         """
         minimum_size = self.minimumTabSizeHint(index)
-        height = self.fontMetrics().height()
+        height = minimum_size.height()
         if self.vertical:
             confwidth = str(config.get('tabs', 'width'))
             if confwidth.endswith('%'):
@@ -494,6 +514,10 @@ class TabBar(QTabBar):
             tabbed_browser.wheelEvent(e)
 
 
+# Used by TabBarStyle._tab_layout().
+Layouts = collections.namedtuple('Layouts', ['text', 'icon', 'indicator'])
+
+
 class TabBarStyle(QCommonStyle):
 
     """Qt style used by TabBar to fix some issues with the default one.
@@ -533,6 +557,36 @@ class TabBarStyle(QCommonStyle):
             setattr(self, method, functools.partial(target))
         super().__init__()
 
+    def _draw_indicator(self, layouts, opt, p):
+        """Draw the tab indicator.
+
+        Args:
+            layouts: The layouts from _tab_layout.
+            opt: QStyleOption from drawControl.
+            p: QPainter from drawControl.
+        """
+        color = opt.palette.base().color()
+        rect = layouts.indicator
+        indicator_width = config.get('tabs', 'indicator-width')
+        if color.isValid() and indicator_width != 0:
+            p.fillRect(rect, color)
+
+    def _draw_icon(self, layouts, opt, p):
+        """Draw the tab icon.
+
+        Args:
+            layouts: The layouts from _tab_layout.
+            opt: QStyleOption
+            p: QPainter
+        """
+        qtutils.ensure_valid(layouts.icon)
+        icon_mode = (QIcon.Normal if opt.state & QStyle.State_Enabled
+                     else QIcon.Disabled)
+        icon_state = (QIcon.On if opt.state & QStyle.State_Selected
+                      else QIcon.Off)
+        icon = opt.icon.pixmap(opt.iconSize, icon_mode, icon_state)
+        p.drawPixmap(layouts.icon.x(), layouts.icon.y(), icon)
+
     def drawControl(self, element, opt, p, widget=None):
         """Override drawControl to draw odd tabs in a different color.
 
@@ -541,38 +595,26 @@ class TabBarStyle(QCommonStyle):
 
         Args:
             element: ControlElement
-            option: const QStyleOption *
-            painter: QPainter *
-            widget: const QWidget *
+            opt: QStyleOption
+            p: QPainter
+            widget: QWidget
         """
+        layouts = self._tab_layout(opt)
         if element == QStyle.CE_TabBarTab:
             # We override this so we can control TabBarTabShape/TabBarTabLabel.
             self.drawControl(QStyle.CE_TabBarTabShape, opt, p, widget)
             self.drawControl(QStyle.CE_TabBarTabLabel, opt, p, widget)
         elif element == QStyle.CE_TabBarTabShape:
             p.fillRect(opt.rect, opt.palette.window())
-            indicator_color = opt.palette.base().color()
-            indicator_width = config.get('tabs', 'indicator-width')
-            if indicator_color.isValid() and indicator_width != 0:
-                topleft = opt.rect.topLeft()
-                topleft += QPoint(config.get('tabs', 'indicator-space'), 2)
-                p.fillRect(topleft.x(), topleft.y(), indicator_width,
-                           opt.rect.height() - 4, indicator_color)
+            self._draw_indicator(layouts, opt, p)
             # We use super() rather than self._style here because we don't want
             # any sophisticated drawing.
             super().drawControl(QStyle.CE_TabBarTabShape, opt, p, widget)
         elif element == QStyle.CE_TabBarTabLabel:
-            text_rect, icon_rect = self._tab_layout(opt)
             if not opt.icon.isNull():
-                qtutils.ensure_valid(icon_rect)
-                icon_mode = (QIcon.Normal if opt.state & QStyle.State_Enabled
-                             else QIcon.Disabled)
-                icon_state = (QIcon.On if opt.state & QStyle.State_Selected
-                              else QIcon.Off)
-                icon = opt.icon.pixmap(opt.iconSize, icon_mode, icon_state)
-                p.drawPixmap(icon_rect.x(), icon_rect.y(), icon)
+                self._draw_icon(layouts, opt, p)
             alignment = Qt.AlignLeft | Qt.AlignVCenter | Qt.TextHideMnemonic
-            self._style.drawItemText(p, text_rect, alignment, opt.palette,
+            self._style.drawItemText(p, layouts.text, alignment, opt.palette,
                                      opt.state & QStyle.State_Enabled,
                                      opt.text, QPalette.WindowText)
         else:
@@ -591,12 +633,12 @@ class TabBarStyle(QCommonStyle):
         Return:
             An int.
         """
-        if (metric == QStyle.PM_TabBarTabShiftHorizontal or
-                metric == QStyle.PM_TabBarTabShiftVertical or
-                metric == QStyle.PM_TabBarTabHSpace or
-                metric == QStyle.PM_TabBarTabVSpace):
+        if metric in [QStyle.PM_TabBarTabShiftHorizontal,
+                      QStyle.PM_TabBarTabShiftVertical,
+                      QStyle.PM_TabBarTabHSpace,
+                      QStyle.PM_TabBarTabVSpace]:
             return 0
-        elif metric == PM_TabBarPadding:
+        elif metric == PixelMetrics.icon_padding:
             return 4
         else:
             return self._style.pixelMetric(metric, option, widget)
@@ -613,8 +655,8 @@ class TabBarStyle(QCommonStyle):
             A QRect.
         """
         if sr == QStyle.SE_TabBarTabText:
-            text_rect, _icon_rect = self._tab_layout(opt)
-            return text_rect
+            layouts = self._tab_layout(opt)
+            return layouts.text
         else:
             return self._style.subElementRect(sr, opt, widget)
 
@@ -629,22 +671,42 @@ class TabBarStyle(QCommonStyle):
             opt: QStyleOptionTab
 
         Return:
-            A (text_rect, icon_rect) tuple (both QRects).
+            A Layout namedtuple with two QRects.
         """
-        padding = self.pixelMetric(PM_TabBarPadding, opt)
-        icon_rect = QRect()
+        padding = config.get('tabs', 'padding')
+        indicator_padding = config.get('tabs', 'indicator-padding')
+
         text_rect = QRect(opt.rect)
+        indicator_rect = QRect(opt.rect)
+
         qtutils.ensure_valid(text_rect)
+        text_rect.adjust(padding.left, padding.top, -padding.right,
+                         -padding.bottom)
+
         indicator_width = config.get('tabs', 'indicator-width')
-        text_rect.adjust(padding, 0, 0, 0)
-        if indicator_width != 0:
-            text_rect.adjust(indicator_width +
-                             config.get('tabs', 'indicator-space'), 0, 0, 0)
-        if not opt.icon.isNull():
+        if indicator_width == 0:
+            indicator_rect = 0
+        else:
+            qtutils.ensure_valid(indicator_rect)
+            indicator_rect.adjust(padding.left + indicator_padding.left,
+                                  padding.top + indicator_padding.top,
+                                  0,
+                                  -(padding.bottom + indicator_padding.bottom))
+            indicator_rect.setWidth(indicator_width)
+
+            text_rect.adjust(indicator_width + indicator_padding.left +
+                             indicator_padding.right, 0, 0, 0)
+
+        if opt.icon.isNull():
+            icon_rect = QRect()
+        else:
+            icon_padding = self.pixelMetric(PixelMetrics.icon_padding, opt)
             icon_rect = self._get_icon_rect(opt, text_rect)
-            text_rect.adjust(icon_rect.width() + padding, 0, 0, 0)
+            text_rect.adjust(icon_rect.width() + icon_padding, 0, 0, 0)
+
         text_rect = self._style.visualRect(opt.direction, opt.rect, text_rect)
-        return (text_rect, icon_rect)
+        return Layouts(text=text_rect, icon=icon_rect,
+                       indicator=indicator_rect)
 
     def _get_icon_rect(self, opt, text_rect):
         """Get a QRect for the icon to draw.

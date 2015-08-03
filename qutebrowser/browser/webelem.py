@@ -52,7 +52,8 @@ SELECTORS = {
     Group.focus: '*:focus',
 }
 
-FILTERS = {
+# WORKAROUND for https://bitbucket.org/ned/coveragepy/issues/90
+FILTERS = {  # pragma: no branch
     Group.links: (lambda e: 'href' in e and
                             QUrl(e['href']).scheme() != 'javascript'),
 }
@@ -136,7 +137,7 @@ class WebElementWrapper(collections.abc.MutableMapping):
         self._check_vanished()
         if key not in self:
             raise KeyError(key)
-        self.removeAttribute(key)
+        self._elem.removeAttribute(key)
 
     def __contains__(self, key):
         self._check_vanished()
@@ -240,6 +241,7 @@ class WebElementWrapper(collections.abc.MutableMapping):
         for klass in self._elem.classes():
             if any([klass.startswith(e) for e in div_classes]):
                 return True
+        return False
 
     def is_editable(self, strict=False):
         """Check whether we should switch to insert mode for this element.
@@ -279,6 +281,7 @@ class WebElementWrapper(collections.abc.MutableMapping):
 
     def is_text_input(self):
         """Check if this element is some kind of text box."""
+        self._check_vanished()
         roles = ('combobox', 'textbox')
         tag = self._elem.tagName().lower()
         return self.get('role', None) in roles or tag in ('input', 'textarea')

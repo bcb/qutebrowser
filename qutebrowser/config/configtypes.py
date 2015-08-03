@@ -26,6 +26,7 @@ import codecs
 import os.path
 import sre_constants
 import itertools
+import collections
 
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QColor, QFont
@@ -34,7 +35,7 @@ from PyQt5.QtWidgets import QTabWidget, QTabBar
 
 from qutebrowser.commands import cmdutils
 from qutebrowser.config import configexc
-from qutebrowser.utils import standarddir
+from qutebrowser.utils import standarddir, utils
 
 
 SYSTEM_PROXY = object()  # Return value for Proxy type
@@ -71,6 +72,10 @@ class ValidValues:
     def __iter__(self):
         return self.values.__iter__()
 
+    def __repr__(self):
+        return utils.get_repr(self, values=self.values,
+                              descriptions=self.descriptions)
+
 
 class BaseType:
 
@@ -82,14 +87,31 @@ class BaseType:
     Class attributes:
         valid_values: Possible values if they can be expressed as a fixed
                       string. ValidValues instance.
-        typestr: The name of the type to appear in the config.
+        special: If set, the type is only used for one option and isn't
+                 mentioned in the config file.
     """
 
-    typestr = None
     valid_values = None
+    special = False
 
     def __init__(self, none_ok=False):
         self.none_ok = none_ok
+
+    def _basic_validation(self, value):
+        """Do some basic validation for the value (empty, non-printable chars).
+
+        Arguments:
+            value: The value to check.
+        """
+        if not value:
+            if self.none_ok:
+                return
+            else:
+                raise configexc.ValidationError(value, "may not be empty!")
+
+        if any(ord(c) < 32 or ord(c) == 0x7f for c in value):
+            raise configexc.ValidationError(value, "may not contain "
+                                            "unprintable chars!")
 
     def transform(self, value):
         """Transform the setting value.
@@ -117,17 +139,15 @@ class BaseType:
 
         Args:
             value: The value to validate.
-                                method should be overridden.
         """
-        if not value and self.none_ok:
+        self._basic_validation(value)
+        if not value:
             return
         if self.valid_values is not None:
             if value not in self.valid_values:
                 raise configexc.ValidationError(
                     value, "valid values: {}".format(', '.join(
                         self.valid_values)))
-            else:
-                return
         else:
             raise NotImplementedError("{} does not implement validate.".format(
                 self.__class__.__name__))
@@ -156,6 +176,31 @@ class BaseType:
             return out
 
 
+class MappingType(BaseType):
+
+    """Base class for any setting which has a mapping to the given values.
+
+    Attributes:
+        MAPPING: The mapping to use.
+    """
+
+    MAPPING = {}
+
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        if list(sorted(self.MAPPING)) != list(sorted(self.valid_values)):
+            raise ValueError("Mapping {!r} doesn't match valid values "
+                             "{!r}".format(self.MAPPING, self.valid_values))
+
+    def validate(self, value):
+        super().validate(value.lower())
+
+    def transform(self, value):
+        if not value:
+            return None
+        return self.MAPPING[value.lower()]
+
+
 class String(BaseType):
 
     """Base class for a string setting (case-insensitive).
@@ -165,8 +210,6 @@ class String(BaseType):
         maxlen: Maximum length (inclusive).
         forbidden: Forbidden chars in the string.
     """
-
-    typestr = 'string'
 
     def __init__(self, minlen=None, maxlen=None, forbidden=None,
                  none_ok=False):
@@ -183,11 +226,9 @@ class String(BaseType):
         self.forbidden = forbidden
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         if self.forbidden is not None and any(c in value
                                               for c in self.forbidden):
             raise configexc.ValidationError(value, "may not contain the chars "
@@ -204,8 +245,6 @@ class List(BaseType):
 
     """Base class for a (string-)list setting."""
 
-    typestr = 'string-list'
-
     def transform(self, value):
         if not value:
             return None
@@ -213,12 +252,9 @@ class List(BaseType):
             return [v if v else None for v in value.split(',')]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "list may not be "
-                                                "empty!")
+            return
         vals = self.transform(value)
         if None in vals:
             raise configexc.ValidationError(value, "items may not be empty!")
@@ -227,8 +263,6 @@ class List(BaseType):
 class Bool(BaseType):
 
     """Base class for a boolean setting."""
-
-    typestr = 'bool'
 
     valid_values = ValidValues('true', 'false')
 
@@ -239,12 +273,10 @@ class Bool(BaseType):
             return BOOLEAN_STATES[value.lower()]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if value.lower() not in BOOLEAN_STATES:
+            return
+        elif value.lower() not in BOOLEAN_STATES:
             raise configexc.ValidationError(value, "must be a boolean!")
 
 
@@ -276,8 +308,6 @@ class Int(BaseType):
         maxval: Maximum value (inclusive).
     """
 
-    typestr = 'int'
-
     def __init__(self, minval=None, maxval=None, none_ok=False):
         super().__init__(none_ok)
         if maxval is not None and minval is not None and maxval < minval:
@@ -293,11 +323,9 @@ class Int(BaseType):
             return int(value)
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             intval = int(value)
         except ValueError:
@@ -314,8 +342,6 @@ class IntList(List):
 
     """Base class for an int-list setting."""
 
-    typestr = 'int-list'
-
     def transform(self, value):
         if not value:
             return None
@@ -323,11 +349,9 @@ class IntList(List):
         return [int(v) if v is not None else None for v in vals]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             vals = self.transform(value)
         except ValueError:
@@ -346,8 +370,6 @@ class Float(BaseType):
         maxval: Maximum value (inclusive).
     """
 
-    typestr = 'float'
-
     def __init__(self, minval=None, maxval=None, none_ok=False):
         super().__init__(none_ok)
         if maxval is not None and minval is not None and maxval < minval:
@@ -363,11 +385,9 @@ class Float(BaseType):
             return float(value)
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             floatval = float(value)
         except ValueError:
@@ -389,8 +409,6 @@ class Perc(BaseType):
         maxval: Maximum value (inclusive).
     """
 
-    typestr = 'percentage'
-
     def __init__(self, minval=None, maxval=None, none_ok=False):
         super().__init__(none_ok)
         if maxval is not None and minval is not None and maxval < minval:
@@ -406,12 +424,10 @@ class Perc(BaseType):
             return int(value[:-1])
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty")
-        if not value.endswith('%'):
+            return
+        elif not value.endswith('%'):
             raise configexc.ValidationError(value, "does not end with %")
         try:
             intval = int(value[:-1])
@@ -434,8 +450,6 @@ class PercList(List):
         maxval: Maximum value (inclusive).
     """
 
-    typestr = 'perc-list'
-
     def __init__(self, minval=None, maxval=None, none_ok=False):
         super().__init__(none_ok)
         if maxval is not None and minval is not None and maxval < minval:
@@ -445,10 +459,15 @@ class PercList(List):
         self.maxval = maxval
 
     def transform(self, value):
+        if not value:
+            return None
         vals = super().transform(value)
         return [int(v[:-1]) if v is not None else None for v in vals]
 
     def validate(self, value):
+        self._basic_validation(value)
+        if not value:
+            return
         vals = super().transform(value)
         perctype = Perc(minval=self.minval, maxval=self.maxval)
         try:
@@ -477,8 +496,6 @@ class PercOrInt(BaseType):
         maxint: Maximum value for integer (inclusive).
     """
 
-    typestr = 'percentage-or-int'
-
     def __init__(self, minperc=None, maxperc=None, minint=None, maxint=None,
                  none_ok=False):
         super().__init__(none_ok)
@@ -494,12 +511,10 @@ class PercOrInt(BaseType):
         self.maxint = maxint
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if value.endswith('%'):
+            return
+        elif value.endswith('%'):
             try:
                 intval = int(value[:-1])
             except ValueError:
@@ -528,15 +543,12 @@ class Command(BaseType):
 
     """Base class for a command value with arguments."""
 
-    typestr = 'command'
-
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if value.split()[0] not in cmdutils.cmd_dict:
+            return
+        splitted = value.split()
+        if not splitted or splitted[0] not in cmdutils.cmd_dict:
             raise configexc.ValidationError(value, "must be a valid command!")
 
     def complete(self):
@@ -546,41 +558,30 @@ class Command(BaseType):
         return out
 
 
-class ColorSystem(BaseType):
+class ColorSystem(MappingType):
 
     """Color systems for interpolation."""
 
+    special = True
     valid_values = ValidValues(('rgb', "Interpolate in the RGB color system."),
                                ('hsv', "Interpolate in the HSV color system."),
                                ('hsl', "Interpolate in the HSL color system."))
 
-    def validate(self, value):
-        super().validate(value.lower())
-
-    def transform(self, value):
-        if not value:
-            return None
-        else:
-            mapping = {
-                'rgb': QColor.Rgb,
-                'hsv': QColor.Hsv,
-                'hsl': QColor.Hsl,
-            }
-            return mapping[value.lower()]
+    MAPPING = {
+        'rgb': QColor.Rgb,
+        'hsv': QColor.Hsv,
+        'hsl': QColor.Hsl,
+    }
 
 
 class QtColor(BaseType):
 
     """Base class for QColor."""
 
-    typestr = 'qcolor'
-
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         elif QColor.isValidColor(value):
             pass
         else:
@@ -597,15 +598,11 @@ class CssColor(BaseType):
 
     """Base class for a CSS color value."""
 
-    typestr = 'css-color'
-
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if value.startswith('-'):
+            return
+        elif value.startswith('-'):
             # custom function name, won't validate.
             pass
         elif QColor.isValidColor(value):
@@ -622,8 +619,6 @@ class QssColor(CssColor):
         color_func_regexes: Valid function regexes.
     """
 
-    typestr = 'qss-color'
-
     color_func_regexes = [
         r'rgb\([0-9]{1,3}%?, [0-9]{1,3}%?, [0-9]{1,3}%?\)',
         r'rgba\([0-9]{1,3}%?, [0-9]{1,3}%?, [0-9]{1,3}%?, [0-9]{1,3}%?\)',
@@ -635,11 +630,9 @@ class QssColor(CssColor):
     ]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         elif any(re.match(r, value) for r in self.color_func_regexes):
             # QColor doesn't handle these, so we do the best we can easily
             pass
@@ -653,7 +646,6 @@ class Font(BaseType):
 
     """Base class for a font value."""
 
-    typestr = 'font'
     font_regex = re.compile(r"""
         ^(
             (
@@ -671,12 +663,10 @@ class Font(BaseType):
         (?P<family>[A-Za-z0-9, "-]*)$  # mandatory font family""", re.VERBOSE)
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if not self.font_regex.match(value):
+            return
+        elif not self.font_regex.match(value):
             raise configexc.ValidationError(value, "must be a valid font")
 
 
@@ -685,11 +675,9 @@ class FontFamily(Font):
     """A Qt font family."""
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         match = self.font_regex.match(value)
         if not match:
             raise configexc.ValidationError(value, "must be a valid font")
@@ -737,6 +725,11 @@ class QtFont(Font):
                 font.setPointSizeF(float(size[:-2]))
             elif size.lower().endswith('px'):
                 font.setPixelSize(int(size[:-2]))
+            else:
+                # This should never happen as the regex only lets pt/px
+                # through.
+                raise ValueError("Unexpected size unit in {!r}!".format(
+                    size))  # pragma: no cover
         # The Qt CSS parser handles " and ' before passing the string to
         # QFont.setFamily. We could do proper CSS-like parsing here, but since
         # hopefully nobody will ever have a font with quotes in the family (if
@@ -750,18 +743,14 @@ class Regex(BaseType):
 
     """A regular expression."""
 
-    typestr = 'regex'
-
     def __init__(self, flags=0, none_ok=False):
         super().__init__(none_ok)
         self.flags = flags
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             re.compile(value, self.flags)
         except sre_constants.error as e:
@@ -779,18 +768,21 @@ class RegexList(List):
 
     """A list of regexes."""
 
-    typestr = 'regex-list'
-
     def __init__(self, flags=0, none_ok=False):
         super().__init__(none_ok)
         self.flags = flags
 
     def transform(self, value):
+        if not value:
+            return None
         vals = super().transform(value)
         return [re.compile(v, self.flags) if v is not None else None
                 for v in vals]
 
     def validate(self, value):
+        self._basic_validation(value)
+        if not value:
+            return
         try:
             vals = self.transform(value)
         except sre_constants.error as e:
@@ -804,8 +796,6 @@ class File(BaseType):
 
     """A file on the local filesystem."""
 
-    typestr = 'file'
-
     def transform(self, value):
         if not value:
             return None
@@ -818,11 +808,9 @@ class File(BaseType):
         return value
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         value = os.path.expanduser(value)
         value = os.path.expandvars(value)
         try:
@@ -849,14 +837,10 @@ class Directory(BaseType):
 
     """A directory on the local filesystem."""
 
-    typestr = 'directory'
-
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         value = os.path.expandvars(value)
         value = os.path.expanduser(value)
         try:
@@ -880,22 +864,18 @@ class FormatString(BaseType):
 
     """A string with '{foo}'-placeholders."""
 
-    typestr = 'format-string'
-
     def __init__(self, fields, none_ok=False):
         super().__init__(none_ok)
         self.fields = fields
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         s = self.transform(value)
         try:
             return s.format(**{k: '' for k in self.fields})
-        except KeyError as e:
+        except (KeyError, IndexError) as e:
             raise configexc.ValidationError(value, "Invalid placeholder "
                                             "{}".format(e))
         except ValueError as e:
@@ -924,15 +904,13 @@ class WebKitBytes(BaseType):
         'y': 1024 ** 8,
     }
 
-    typestr = 'bytes'
-
     def __init__(self, maxsize=None, none_ok=False):
         super().__init__(none_ok)
         self.maxsize = maxsize
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            # WebKitBytes is always None-able.
             return
         try:
             val = self.transform(value)
@@ -967,12 +945,10 @@ class WebKitBytesList(List):
         bytestype: The webkit bytes type.
     """
 
-    typestr = 'bytes-list'
-
     def __init__(self, maxsize=None, length=None, none_ok=False):
         super().__init__(none_ok)
         self.length = length
-        self.bytestype = WebKitBytes(maxsize)
+        self.bytestype = WebKitBytes(maxsize, none_ok=none_ok)
 
     def transform(self, value):
         if value == '':
@@ -982,13 +958,12 @@ class WebKitBytesList(List):
             return [self.bytestype.transform(val) for val in vals]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
             return
         vals = super().transform(value)
         for val in vals:
             self.bytestype.validate(val)
-        if None in vals and not self.none_ok:
-            raise configexc.ValidationError(value, "items may not be empty!")
         if self.length is not None and len(vals) != self.length:
             raise configexc.ValidationError(value, "exactly {} values need to "
                                             "be set!".format(self.length))
@@ -1002,18 +977,14 @@ class ShellCommand(BaseType):
         placeholder: If there should be a placeholder.
     """
 
-    typestr = 'shell-command'
-
     def __init__(self, placeholder=False, none_ok=False):
         super().__init__(none_ok)
         self.placeholder = placeholder
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             shlex.split(value)
         except ValueError as e:
@@ -1033,6 +1004,7 @@ class HintMode(BaseType):
 
     """Base class for the hints -> mode setting."""
 
+    special = True
     valid_values = ValidValues(('number', "Use numeric hints."),
                                ('letter', "Use the chars in the hints -> "
                                           "chars setting."))
@@ -1042,6 +1014,7 @@ class Proxy(BaseType):
 
     """A proxy URL or special value."""
 
+    special = True
     valid_values = ValidValues(('system', "Use the system wide proxy."),
                                ('none', "Don't use any proxy"))
 
@@ -1052,12 +1025,10 @@ class Proxy(BaseType):
     }
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
-        if value in self.valid_values:
+            return
+        elif value in self.valid_values:
             return
         url = QUrl(value)
         if not url.isValid():
@@ -1099,32 +1070,31 @@ class SearchEngineName(BaseType):
 
     """A search engine name."""
 
+    special = True
+
     def validate(self, value):
-        if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+        self._basic_validation(value)
 
 
 class SearchEngineUrl(BaseType):
 
     """A search engine URL."""
 
-    def validate(self, value):
-        if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+    special = True
 
-        if '{}' not in value:
+    def validate(self, value):
+        self._basic_validation(value)
+        if not value:
+            return
+        elif '{}' not in value:
             raise configexc.ValidationError(value, "must contain \"{}\"")
         try:
             value.format("")
-        except KeyError:
+        except (KeyError, IndexError) as e:
             raise configexc.ValidationError(
                 value, "may not contain {...} (use {{ and }} for literal {/})")
+        except ValueError as e:
+            raise configexc.ValidationError(value, str(e))
 
         url = QUrl(value.replace('{}', 'foobar'))
         if not url.isValid():
@@ -1137,12 +1107,10 @@ class FuzzyUrl(BaseType):
     """A single URL."""
 
     def validate(self, value):
-        from qutebrowser.utils import urlutils
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
+        from qutebrowser.utils import urlutils
         try:
             self.transform(value)
         except urlutils.FuzzyUrlError as e:
@@ -1156,18 +1124,45 @@ class FuzzyUrl(BaseType):
             return urlutils.fuzzy_url(value, do_search=False)
 
 
+PaddingValues = collections.namedtuple('PaddingValues', ['top', 'bottom',
+                                                         'left', 'right'])
+
+
+class Padding(IntList):
+
+    """Setting for paddings around elements."""
+
+    def validate(self, value):
+        self._basic_validation(value)
+        if not value:
+            return
+        try:
+            vals = self.transform(value)
+        except (ValueError, TypeError):
+            raise configexc.ValidationError(value, "must be a list of 4 "
+                                            "integers!")
+        if None in vals and not self.none_ok:
+            raise configexc.ValidationError(value, "items may not be empty!")
+        elems = self.transform(value)
+        if any(e is not None and e < 0 for e in elems):
+            raise configexc.ValidationError(value, "Values need to be "
+                                            "positive!")
+
+    def transform(self, value):
+        elems = super().transform(value)
+        if elems is None:
+            return elems
+        return PaddingValues(*elems)
+
+
 class Encoding(BaseType):
 
     """Setting for a python encoding."""
 
-    typestr = 'encoding'
-
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         try:
             codecs.lookup(value)
         except LookupError:
@@ -1178,10 +1173,7 @@ class UserStyleSheet(File):
 
     """QWebSettings UserStyleSheet."""
 
-    typestr = 'user-stylesheet'
-
-    def __init__(self):
-        super().__init__(none_ok=True)
+    special = True
 
     def transform(self, value):
         if not value:
@@ -1194,11 +1186,9 @@ class UserStyleSheet(File):
             return QUrl("data:text/css;charset=utf-8;base64,{}".format(data))
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+            return
         value = os.path.expandvars(value)
         value = os.path.expanduser(value)
         try:
@@ -1219,6 +1209,7 @@ class AutoSearch(BaseType):
 
     """Whether to start a search when something else than a URL is entered."""
 
+    special = True
     valid_values = ValidValues(('naive', "Use simple/naive check."),
                                ('dns', "Use DNS requests (might be slow!)."),
                                ('false', "Never search automatically."))
@@ -1228,7 +1219,10 @@ class AutoSearch(BaseType):
         self.booltype = Bool(none_ok=none_ok)
 
     def validate(self, value):
-        if value.lower() in ('naive', 'dns'):
+        self._basic_validation(value)
+        if not value:
+            return
+        elif value.lower() in ('naive', 'dns'):
             pass
         else:
             self.booltype.validate(value)
@@ -1245,7 +1239,7 @@ class AutoSearch(BaseType):
             return False
 
 
-class Position(BaseType):
+class Position(MappingType):
 
     """The position of the tab bar."""
 
@@ -1257,11 +1251,6 @@ class Position(BaseType):
         'west': QTabWidget.West,
         'east': QTabWidget.East,
     }
-
-    def transform(self, value):
-        if not value:
-            return None
-        return self.MAPPING[value]
 
 
 class VerticalPosition(BaseType):
@@ -1275,8 +1264,6 @@ class UrlList(List):
 
     """A list of URLs."""
 
-    typestr = 'url-list'
-
     def transform(self, value):
         if not value:
             return None
@@ -1285,12 +1272,9 @@ class UrlList(List):
                     for v in value.split(',')]
 
     def validate(self, value):
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "list may not be "
-                                                "empty!")
+            return
         vals = self.transform(value)
         for val in vals:
             if val is None:
@@ -1305,22 +1289,19 @@ class SessionName(BaseType):
 
     """The name of a session."""
 
-    typestr = 'session'
+    special = True
 
     def validate(self, value):
-        if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+        self._basic_validation(value)
         if value.startswith('_'):
             raise configexc.ValidationError(value, "may not start with '_'!")
 
 
-class SelectOnRemove(BaseType):
+class SelectOnRemove(MappingType):
 
     """Which tab to select when the focused tab is removed."""
 
+    special = True
     valid_values = ValidValues(
         ('left', "Select the tab on the left."),
         ('right', "Select the tab on the right."),
@@ -1332,16 +1313,12 @@ class SelectOnRemove(BaseType):
         'previous': QTabBar.SelectPreviousTab,
     }
 
-    def transform(self, value):
-        if not value:
-            return None
-        return self.MAPPING[value]
-
 
 class LastClose(BaseType):
 
     """Behavior when the last tab is closed."""
 
+    special = True
     valid_values = ValidValues(('ignore', "Don't do anything."),
                                ('blank', "Load a blank page."),
                                ('startpage', "Load the start page."),
@@ -1353,6 +1330,7 @@ class AcceptCookies(BaseType):
 
     """Control which cookies to accept."""
 
+    special = True
     valid_values = ValidValues(('all', "Accept all cookies."),
                                ('no-3rdparty', "Accept cookies from the same"
                                 " origin only."),
@@ -1366,8 +1344,7 @@ class ConfirmQuit(List):
 
     """Whether to display a confirmation when the window is closed."""
 
-    typestr = 'string-list'
-
+    special = True
     valid_values = ValidValues(('always', "Always show a confirmation."),
                                ('multiple-tabs', "Show a confirmation if "
                                                  "multiple tabs are opened."),
@@ -1378,15 +1355,20 @@ class ConfirmQuit(List):
     combinable_values = ('multiple-tabs', 'downloads')
 
     def validate(self, value):
-        values = self.transform(value)
+        self._basic_validation(value)
         if not value:
-            if self.none_ok:
-                return None
+            return
+        values = []
+        for v in self.transform(value):
+            if v:
+                values.append(v)
+            elif self.none_ok:
+                pass
             else:
-                raise configexc.ValidationError(
-                    value, "Value may not be empty!")
+                raise configexc.ValidationError(value, "May not contain empty "
+                                                       "values!")
         # Never can't be set with other options
-        elif 'never' in values and len(values) > 1:
+        if 'never' in values and len(values) > 1:
             raise configexc.ValidationError(
                 value, "List cannot contain never!")
         # Always can't be set with other options
@@ -1423,6 +1405,7 @@ class ForwardUnboundKeys(BaseType):
 
     """Whether to forward unbound keys."""
 
+    special = True
     valid_values = ValidValues(('all', "Forward all unbound keys."),
                                ('auto', "Forward unbound non-alphanumeric "
                                         "keys."),
@@ -1433,6 +1416,7 @@ class CloseButton(BaseType):
 
     """Mouse button used to close tabs."""
 
+    special = True
     valid_values = ValidValues(('right', "Close tabs on right-click."),
                                ('middle', "Close tabs on middle-click."),
                                ('none', "Don't close tabs using the mouse."))
@@ -1442,6 +1426,7 @@ class NewTabPosition(BaseType):
 
     """How new tabs are positioned."""
 
+    special = True
     valid_values = ValidValues(('left', "On the left of the current tab."),
                                ('right', "On the right of the current tab."),
                                ('first', "At the left end."),
@@ -1452,6 +1437,7 @@ class IgnoreCase(Bool):
 
     """Whether to ignore case when searching."""
 
+    special = True
     valid_values = ValidValues(('true', "Search case-insensitively"),
                                ('false', "Search case-sensitively"),
                                ('smart', "Search case-sensitively if there "
@@ -1464,6 +1450,9 @@ class IgnoreCase(Bool):
             return super().transform(value)
 
     def validate(self, value):
+        self._basic_validation(value)
+        if not value:
+            return
         if value.lower() == 'smart':
             return
         else:
@@ -1474,6 +1463,7 @@ class NewInstanceOpenTarget(BaseType):
 
     """How to open links in an existing instance if a new one is launched."""
 
+    special = True
     valid_values = ValidValues(('tab', "Open a new tab in the existing "
                                        "window and activate the window."),
                                ('tab-bg', "Open a new background tab in the "
@@ -1493,26 +1483,35 @@ class DownloadPathSuggestion(BaseType):
 
     """How to format the question when downloading."""
 
+    special = True
     valid_values = ValidValues(('path', "Show only the download path."),
                                ('filename', "Show only download filename."),
                                ('both', "Show download path and filename."))
+
+
+class Referer(BaseType):
+
+    """Send the Referer header."""
+
+    valid_values = ValidValues(('always', "Always send."),
+                               ('never', "Never send; this is not recommended,"
+                                   " as some sites may break."),
+                               ('same-domain', "Only send for the same domain."
+                                   " This will still protect your privacy, but"
+                                   " shouldn't break any sites."))
 
 
 class UserAgent(BaseType):
 
     """The user agent to use."""
 
-    typestr = 'user-agent'
+    special = True
 
     def __init__(self, none_ok=False):
         super().__init__(none_ok)
 
     def validate(self, value):
-        if not value:
-            if self.none_ok:
-                return
-            else:
-                raise configexc.ValidationError(value, "may not be empty!")
+        self._basic_validation(value)
 
     def complete(self):
         """Complete a list of common user agents."""
@@ -1567,3 +1566,15 @@ class UserAgent(BaseType):
              "curl 7.40.0")
         ]
         return out
+
+
+class TabBarShow(BaseType):
+
+    """When to show the tab bar."""
+
+    valid_values = ValidValues(('always', "Always show the tab bar."),
+                               ('never', "Always hide the tab bar."),
+                               ('multiple', "Hide the tab bar if only one tab "
+                                            "is open."),
+                               ('switching', "Show the tab bar when switching "
+                                             "tabs."))

@@ -497,3 +497,30 @@ def test_fuzzy_url_error(url, raising, has_err_string):
         else:
             expected_text = "Error message"
         assert str(excinfo.value) == expected_text
+
+
+@pytest.mark.parametrize('are_same, url1, url2', [
+    (True, 'http://example.com', 'http://www.example.com'),
+    (True, 'http://bbc.co.uk', 'https://www.bbc.co.uk'),
+    (True, 'http://many.levels.of.domains.example.com', 'http://www.example.com'),
+    (True, 'http://idn.иком.museum', 'http://idn2.иком.museum'),
+    (True, 'http://one.not_a_valid_tld', 'http://one.not_a_valid_tld'),
+
+    (False, 'http://bbc.co.uk', 'http://example.co.uk'),
+    (False, 'https://example.kids.museum', 'http://example.kunst.museum'),
+    (False, 'http://idn.иком.museum', 'http://idn.ירושלים.museum'),
+    (False, 'http://one.not_a_valid_tld', 'http://two.not_a_valid_tld'),
+])
+def test_same_domain(are_same, url1, url2):
+    """Test same_domain."""
+    assert urlutils.same_domain(QUrl(url1), QUrl(url2)) == are_same
+    assert urlutils.same_domain(QUrl(url2), QUrl(url1)) == are_same
+
+@pytest.mark.parametrize('url1, url2', [
+    ('http://example.com', ''),
+    ('', 'http://example.com'),
+])
+def test_same_domain_invalid_url(url1, url2):
+    """Test same_domain with invalid URLs."""
+    with pytest.raises(ValueError):
+        urlutils.same_domain(QUrl(url1), QUrl(url2))

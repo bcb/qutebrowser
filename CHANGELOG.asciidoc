@@ -17,6 +17,22 @@ This project adheres to http://semver.org/[Semantic Versioning].
 v0.4.0 (unreleased)
 -------------------
 
+Added
+~~~~~
+
+- New bookmark functionality (similar to quickmarks without a name).
+    * New command `:bookmark-add` to bookmark the current page (bound to `M`).
+    * New command `:bookmark-load` to load a bookmark (bound to `gb`/`gB`/`wB`).
+- New (hidden) command `:completion-item-del` (bound to `<Ctrl-D>`) to delete
+  the current item in the completion (for quickmarks/bookmarks).
+- New settings `tabs -> padding` and `tabs -> indicator-tabbing` to control the
+  size/padding of the tabbar.
+- New setting `network -> referer-header` to configure when the referer should
+  be sent (by default it's only sent while on the same domain).
+- New setting `tabs -> show` which supersedes the old `tabs -> hide-*` options
+  and has an additional `switching` option which shows tab while switching
+  them. There's also a new `show-switching` option to configure the timeout.
+
 Changed
 ~~~~~~~
 
@@ -25,6 +41,22 @@ Changed
   this might cause qutebrowser to hang.
 - The `:yank-selected` command now works in all modes instead of just caret
   mode and is not hidden anymore.
+- `minimal_webkit_testbrowser.py` now has a `--webengine` switch to test
+  QtWebEngine if it's installed.
+
+Fixed
+~~~~~
+
+- `link_pyqt.py` now should work better on untested distributions.
+- Fixed various corner-cases with crashes when reading invalid config values.
+
+Removed
+~~~~~~~
+
+- The `tabs -> indicator-space` setting got removed as the new padding settings
+  should be used instead.
+- The `tabs -> hide-always` and `tabs -> hide-auto` settings got merged into
+  the new `tabs -> show` setting.
 
 v0.3.0
 ------
