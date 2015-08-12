@@ -240,7 +240,7 @@ def data(readonly=False):
              "The default zoom level."),
 
             ('downloads-position',
-             SettingValue(typ.VerticalPosition(), 'north'),
+             SettingValue(typ.VerticalPosition(), 'top'),
              "Where to show the downloaded files."),
 
             ('message-timeout',
@@ -501,7 +501,7 @@ def data(readonly=False):
              "On which mouse button to close tabs."),
 
             ('position',
-             SettingValue(typ.Position(), 'north'),
+             SettingValue(typ.Position(), 'top'),
              "The position of the tab bar."),
 
             ('show-favicons',
@@ -557,6 +557,11 @@ def data(readonly=False):
              "The directory to save downloads to. An empty value selects a "
              "sensible os-specific default. Will expand environment "
              "variables."),
+
+            ('prompt-download-directory',
+             SettingValue(typ.Bool(), 'true'),
+             "Whether to prompt the user for the download location.\n"
+             "If set to false, 'download-directory' will be used."),
 
             ('remember-download-directory',
              SettingValue(typ.Bool(), 'true'),
@@ -1231,7 +1236,7 @@ KEY_DATA = collections.OrderedDict([
         ('tab-move', ['gm']),
         ('tab-move -', ['gl']),
         ('tab-move +', ['gr']),
-        ('tab-next', ['J', 'gt']),
+        ('tab-focus', ['J', 'gt']),
         ('tab-prev', ['K', 'gT']),
         ('tab-clone', ['gC']),
         ('reload', ['r']),

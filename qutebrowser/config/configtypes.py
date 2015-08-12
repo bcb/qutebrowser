@@ -803,8 +803,8 @@ class File(BaseType):
         value = os.path.expandvars(value)
         if not os.path.isabs(value):
             cfgdir = standarddir.config()
-            if cfgdir is not None:
-                return os.path.join(cfgdir, value)
+            assert cfgdir is not None
+            return os.path.join(cfgdir, value)
         return value
 
     def validate(self, value):
@@ -1113,7 +1113,7 @@ class FuzzyUrl(BaseType):
         from qutebrowser.utils import urlutils
         try:
             self.transform(value)
-        except urlutils.FuzzyUrlError as e:
+        except urlutils.InvalidUrlError as e:
             raise configexc.ValidationError(value, str(e))
 
     def transform(self, value):
@@ -1243,13 +1243,13 @@ class Position(MappingType):
 
     """The position of the tab bar."""
 
-    valid_values = ValidValues('north', 'south', 'east', 'west')
+    valid_values = ValidValues('top', 'bottom', 'left', 'right')
 
     MAPPING = {
-        'north': QTabWidget.North,
-        'south': QTabWidget.South,
-        'west': QTabWidget.West,
-        'east': QTabWidget.East,
+        'top': QTabWidget.North,
+        'bottom': QTabWidget.South,
+        'left': QTabWidget.West,
+        'right': QTabWidget.East,
     }
 
 
@@ -1257,7 +1257,7 @@ class VerticalPosition(BaseType):
 
     """The position of the download bar."""
 
-    valid_values = ValidValues('north', 'south')
+    valid_values = ValidValues('top', 'bottom')
 
 
 class UrlList(List):

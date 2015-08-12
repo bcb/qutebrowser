@@ -21,7 +21,6 @@
 
 import collections
 import functools
-import math
 
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QSize, QRect, QTimer
 from PyQt5.QtWidgets import (QTabWidget, QTabBar, QSizePolicy, QCommonStyle,
@@ -309,13 +308,8 @@ class TabBar(QTabBar):
     def set_font(self):
         """Set the tab bar font."""
         self.setFont(config.get('fonts', 'tabbar'))
-
-    def resizeEvent(self, e):
-        """Set the favicon size to the tabbar size minus some padding."""
-        height = e.size().height()
-        if height != 0 and e.oldSize().height() != height:
-            height = math.ceil(height - height / 7)
-            self.setIconSize(QSize(height, height))
+        size = self.fontMetrics().height() - 2
+        self.setIconSize(QSize(size, size))
 
     @config.change_filter('colors', 'tabs.bg.bar')
     def set_colors(self):
@@ -729,8 +723,7 @@ class TabBarStyle(QCommonStyle):
         tab_icon_size = opt.icon.actualSize(icon_size, icon_mode, icon_state)
         tab_icon_size = QSize(min(tab_icon_size.width(), icon_size.width()),
                               min(tab_icon_size.height(), icon_size.height()))
-        icon_rect = QRect(text_rect.left(),
-                          text_rect.center().y() - tab_icon_size.height() / 2,
+        icon_rect = QRect(text_rect.left(), text_rect.top() + 1,
                           tab_icon_size.width(), tab_icon_size.height())
         icon_rect = self._style.visualRect(opt.direction, opt.rect, icon_rect)
         qtutils.ensure_valid(icon_rect)

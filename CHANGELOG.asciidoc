@@ -32,6 +32,11 @@ Added
 - New setting `tabs -> show` which supersedes the old `tabs -> hide-*` options
   and has an additional `switching` option which shows tab while switching
   them. There's also a new `show-switching` option to configure the timeout.
+- New setting `storage -> remember-download-directory` to remember the last
+  used download directory.
+- New setting `storage -> prompt-download-directory` to download all downloads
+  without asking.
+- Rapid hinting is now also possible for downloads.
 
 Changed
 ~~~~~~~
@@ -43,12 +48,22 @@ Changed
   mode and is not hidden anymore.
 - `minimal_webkit_testbrowser.py` now has a `--webengine` switch to test
   QtWebEngine if it's installed.
+- The column width percentages for the completion view now depend on the
+  completion model.
 
 Fixed
 ~~~~~
 
 - `link_pyqt.py` now should work better on untested distributions.
-- Fixed various corner-cases with crashes when reading invalid config values.
+- Fixed various corner-cases with crashes when reading invalid config values
+  and the history file.
+- Fixed various corner-cases when setting text via an external editor.
+- Fixed potential crash when hinting a text field.
+- Fixed entering of insert mode when certain disabled text fields were clicked.
+- Fixed a crash when using `:set` with `-p` and `!` (invert value)
+- Downloads with unknown size are now handled correctly.
+- `:navigate increment/decrement` (`<Ctrl-A>`/`<Ctrl-X>`) now handles some
+  corner-cases better.
 
 Removed
 ~~~~~~~

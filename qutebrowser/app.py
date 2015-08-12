@@ -29,6 +29,7 @@ import time
 import shutil
 import tempfile
 import atexit
+import datetime
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QDesktopServices, QPixmap, QIcon, QCursor, QWindow
@@ -271,7 +272,7 @@ def process_pos_args(args, via_ipc=False, cwd=None):
             log.init.debug("Startup URL {}".format(cmd))
             try:
                 url = urlutils.fuzzy_url(cmd, cwd, relative=True)
-            except urlutils.FuzzyUrlError as e:
+            except urlutils.InvalidUrlError as e:
                 message.error('current', "Error in startup argument '{}': "
                               "{}".format(cmd, e))
             else:
@@ -301,7 +302,7 @@ def _open_startpage(win_id=None):
             for urlstr in config.get('general', 'startpage'):
                 try:
                     url = urlutils.fuzzy_url(urlstr, do_search=False)
-                except urlutils.FuzzyUrlError as e:
+                except urlutils.InvalidUrlError as e:
                     message.error('current', "Error when opening startpage: "
                                   "{}".format(e))
                     tabbed_browser.tabopen(QUrl('about:blank'))
@@ -711,6 +712,8 @@ class Application(QApplication):
         self._args = args
         objreg.register('args', args)
         objreg.register('app', self)
+
+        self.launch_time = datetime.datetime.now()
 
     def __repr__(self):
         return utils.get_repr(self)

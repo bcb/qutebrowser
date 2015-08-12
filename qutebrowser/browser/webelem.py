@@ -43,19 +43,23 @@ Group = usertypes.enum('Group', ['all', 'links', 'images', 'url', 'prevnext',
 
 SELECTORS = {
     Group.all: ('a, area, textarea, select, input:not([type=hidden]), button, '
-                'frame, iframe, [onclick], [onmousedown], [role=link], '
+                'frame, iframe, link, [onclick], [onmousedown], [role=link], '
                 '[role=option], [role=button], img'),
     Group.links: 'a, area, link, [role=link]',
     Group.images: 'img',
     Group.url: '[src], [href]',
-    Group.prevnext: 'a, area, button, [role=button]',
+    Group.prevnext: 'a, area, button, link, [role=button]',
     Group.focus: '*:focus',
 }
 
-# WORKAROUND for https://bitbucket.org/ned/coveragepy/issues/90
-FILTERS = {  # pragma: no branch
-    Group.links: (lambda e: 'href' in e and
-                            QUrl(e['href']).scheme() != 'javascript'),
+
+def filter_links(elem):
+    return 'href' in elem and QUrl(elem['href']).scheme() != 'javascript'
+
+
+FILTERS = {
+    Group.links: filter_links,
+    Group.prevnext: filter_links,
 }
 
 
@@ -180,8 +184,6 @@ class WebElementWrapper(collections.abc.MutableMapping):
     def is_content_editable(self):
         """Check if an element has a contenteditable attribute.
 
-        FIXME: Add tests.
-
         Args:
             elem: The QWebElement to check.
 
@@ -246,8 +248,6 @@ class WebElementWrapper(collections.abc.MutableMapping):
     def is_editable(self, strict=False):
         """Check whether we should switch to insert mode for this element.
 
-        FIXME: add tests
-
         Args:
             strict: Whether to do stricter checking so only fields where we can
                     get the value match, for use with the :editor command.
@@ -263,7 +263,7 @@ class WebElementWrapper(collections.abc.MutableMapping):
         tag = self._elem.tagName().lower()
         if self.is_content_editable() and self.is_writable():
             return True
-        elif self.get('role', None) in roles:
+        elif self.get('role', None) in roles and self.is_writable():
             return True
         elif tag == 'input':
             return self._is_editable_input()
@@ -306,6 +306,8 @@ def javascript_escape(text):
         ("'", r"\'"),   # Then escape ' and " as \' and \".
         ('"', r'\"'),   # (note it won't hurt when we escape the wrong one).
         ('\n', r'\n'),  # We also need to escape newlines for some reason.
+        ('\r', r'\r'),
+        ('\x00', r'\x00'),
     )
     for orig, repl in replacements:
         text = text.replace(orig, repl)
@@ -336,8 +338,6 @@ def get_child_frames(startframe):
 
 def focus_elem(frame):
     """Get the focused element in a web frame.
-
-    FIXME: Add tests.
 
     Args:
         frame: The QWebFrame to search in.
