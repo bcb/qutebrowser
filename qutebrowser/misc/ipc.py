@@ -20,6 +20,7 @@
 """Utilities for IPC with existing instances."""
 
 import os
+import time
 import json
 import getpass
 import binascii
@@ -28,7 +29,7 @@ import hashlib
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, QObject
 from PyQt5.QtNetwork import QLocalSocket, QLocalServer, QAbstractSocket
 
-from qutebrowser.utils import log, usertypes, error
+from qutebrowser.utils import log, usertypes, error, objreg
 
 
 CONNECT_TIMEOUT = 100
@@ -36,11 +37,13 @@ WRITE_TIMEOUT = 1000
 READ_TIMEOUT = 5000
 
 
-def _get_socketname(args):
+def _get_socketname(basedir, user=None):
     """Get a socketname to use."""
-    parts = ['qutebrowser', getpass.getuser()]
-    if args.basedir is not None:
-        md5 = hashlib.md5(args.basedir.encode('utf-8'))
+    if user is None:
+        user = getpass.getuser()
+    parts = ['qutebrowser', user]
+    if basedir is not None:
+        md5 = hashlib.md5(basedir.encode('utf-8'))
         parts.append(md5.hexdigest())
     return '-'.join(parts)
 
@@ -93,31 +96,26 @@ class IPCServer(QObject):
     Signals:
         got_args: Emitted when there was an IPC connection and arguments were
                   passed.
+        got_invalid_data: Emitted when there was invalid incoming data.
     """
 
     got_args = pyqtSignal(list, str)
+    got_invalid_data = pyqtSignal()
 
-    def __init__(self, args, parent=None):
+    def __init__(self, socketname, parent=None):
         """Start the IPC server and listen to commands.
 
         Args:
-            args: The argparse namespace.
+            socketname: The socketname to use.
             parent: The parent to be used.
         """
         super().__init__(parent)
         self.ignored = False
-        self._socketname = _get_socketname(args)
-        self._remove_server()
+        self._socketname = socketname
         self._timer = usertypes.Timer(self, 'ipc-timeout')
         self._timer.setInterval(READ_TIMEOUT)
         self._timer.timeout.connect(self.on_timeout)
         self._server = QLocalServer(self)
-        ok = self._server.listen(self._socketname)
-        if not ok:
-            if self._server.serverError() == QAbstractSocket.AddressInUseError:
-                raise AddressInUseError(self._server)
-            else:
-                raise ListenError(self._server)
         self._server.newConnection.connect(self.handle_connection)
         self._socket = None
 
@@ -128,9 +126,24 @@ class IPCServer(QObject):
             raise Error("Error while removing server {}!".format(
                 self._socketname))
 
+    def listen(self):
+        """Start listening on self._servername."""
+        log.ipc.debug("Listening as {}".format(self._socketname))
+        self._remove_server()
+        ok = self._server.listen(self._socketname)
+        if not ok:
+            if self._server.serverError() == QAbstractSocket.AddressInUseError:
+                raise AddressInUseError(self._server)
+            else:
+                raise ListenError(self._server)
+
     @pyqtSlot(int)
     def on_error(self, err):
         """Convenience method which calls _socket_error on an error."""
+        if self._socket is None:
+            # Sometimes this gets called from stale sockets, especially in
+            # tests.
+            return
         self._timer.stop()
         log.ipc.debug("Socket error {}: {}".format(
             self._socket.error(), self._socket.errorString()))
@@ -172,16 +185,18 @@ class IPCServer(QObject):
         """Clean up socket when the client disconnected."""
         log.ipc.debug("Client disconnected.")
         self._timer.stop()
-        self._socket.deleteLater()
-        self._socket = None
+        if self._socket is not None:
+            self._socket.deleteLater()
+            self._socket = None
         # Maybe another connection is waiting.
         self.handle_connection()
 
     @pyqtSlot()
     def on_ready_read(self):
         """Read json data from the client."""
-        if self._socket is None:
-            # this happened once and I don't know why
+        if self._socket is None:  # pragma: no cover
+            # This happens when doing a connection while another one is already
+            # active for some reason.
             log.ipc.warn("In on_ready_read with None socket!")
             return
         self._timer.start()
@@ -194,6 +209,9 @@ class IPCServer(QObject):
                 log.ipc.error("Ignoring invalid IPC data.")
                 log.ipc.debug("invalid data: {}".format(
                     binascii.hexlify(data)))
+                self.got_invalid_data.emit()
+                self._socket.error.connect(self.on_error)
+                self._socket.disconnectFromServer()
                 return
             log.ipc.debug("Processing: {}".format(decoded))
             try:
@@ -201,12 +219,18 @@ class IPCServer(QObject):
             except ValueError:
                 log.ipc.error("Ignoring invalid IPC data.")
                 log.ipc.debug("invalid json: {}".format(decoded.strip()))
+                self.got_invalid_data.emit()
+                self._socket.error.connect(self.on_error)
+                self._socket.disconnectFromServer()
                 return
             try:
                 args = json_data['args']
             except KeyError:
                 log.ipc.error("Ignoring invalid IPC data.")
                 log.ipc.debug("no args: {}".format(decoded.strip()))
+                self.got_invalid_data.emit()
+                self._socket.error.connect(self.on_error)
+                self._socket.disconnectFromServer()
                 return
             cwd = json_data.get('cwd', None)
             self.got_args.emit(args, cwd)
@@ -239,23 +263,27 @@ def _socket_error(action, socket):
         action, socket.errorString(), socket.error()))
 
 
-def send_to_running_instance(args):
+def send_to_running_instance(socketname, command, *, socket=None):
     """Try to send a commandline to a running instance.
 
     Blocks for CONNECT_TIMEOUT ms.
 
     Args:
-        args: The argparse namespace.
+        socketname: The name which should be used for the socket.
+        command: The command to send to the running instance.
+        socket: The socket to read data from, or None.
 
     Return:
         True if connecting was successful, False if no connection was made.
     """
-    socket = QLocalSocket()
-    socket.connectToServer(_get_socketname(args))
+    if socket is None:
+        socket = QLocalSocket()
+    log.ipc.debug("Connecting to {}".format(socketname))
+    socket.connectToServer(socketname)
     connected = socket.waitForConnected(100)
     if connected:
         log.ipc.info("Opening in existing instance")
-        json_data = {'args': args.command}
+        json_data = {'args': command}
         try:
             cwd = os.getcwd()
         except OSError:
@@ -270,6 +298,9 @@ def send_to_running_instance(args):
         if socket.error() != QLocalSocket.UnknownSocketError:
             _socket_error("writing to running instance", socket)
         else:
+            socket.disconnectFromServer()
+            if socket.state() != QLocalSocket.UnconnectedState:
+                socket.waitForDisconnected(100)
             return True
     else:
         if socket.error() not in (QLocalSocket.ConnectionRefusedError,
@@ -286,3 +317,38 @@ def display_error(exc, args):
     error.handle_fatal_exc(
         exc, args, "Error while connecting to running instance!",
         post_text="Maybe another instance is running but frozen?")
+
+
+def send_or_listen(args):
+    """Send the args to a running instance or start a new IPCServer.
+
+    Args:
+        args: The argparse namespace.
+
+    Return:
+        The IPCServer instance if no running instance was detected.
+        None if an instance was running and received our request.
+    """
+    socketname = _get_socketname(args.basedir)
+    try:
+        sent = send_to_running_instance(socketname, args.command)
+        if sent:
+            return None
+        log.init.debug("Starting IPC server...")
+        server = IPCServer(_get_socketname(args.basedir))
+        server.listen()
+        objreg.register('ipc-server', server)
+        return server
+    except AddressInUseError as e:
+        # This could be a race condition...
+        log.init.debug("Got AddressInUseError, trying again.")
+        time.sleep(500)
+        sent = send_to_running_instance(socketname, args.command)
+        if sent:
+            return None
+        else:
+            display_error(e, args)
+            raise
+    except Error as e:
+        display_error(e, args)
+        raise

@@ -134,16 +134,16 @@ Contributors, sorted by the number of commits in descending order:
 
 // QUTE_AUTHORS_START
 * Florian Bruhin
-* Bruno Oliveira
 * Antoni Boucher
+* Bruno Oliveira
 * Martin Tournoij
+* Alexander Cogneau
 * Raphael Pierzina
 * Joel Torstensson
 * Claude
 * Lamar Pavel
 * Austin Anderson
 * Artur Shaik
-* Alexander Cogneau
 * ZDarian
 * Peter Vilim
 * John ShaggyTwoDope Jenkins
@@ -151,14 +151,15 @@ Contributors, sorted by the number of commits in descending order:
 * Jimmy
 * Zach-Button
 * rikn00
+* Thorsten Wißmann
 * Patric Schmitz
 * Martin Zimmermann
 * Error 800
 * Brian Jackson
 * sbinix
+* jnphilipp
 * Tobias Patzl
 * Johannes Altmanninger
-* Thorsten Wißmann
 * Samir Benmendil
 * Regina Hug
 * Mathias Fussenegger
@@ -166,6 +167,7 @@ Contributors, sorted by the number of commits in descending order:
 * Fritz V155 Reichwald
 * Franz Fellner
 * zwarag
+* meles5
 * error800
 * Tim Harder
 * Thiago Barroso Perrotta
