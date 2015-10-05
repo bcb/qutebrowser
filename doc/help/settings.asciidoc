@@ -23,6 +23,7 @@
 |<<general-log-javascript-console,log-javascript-console>>|Whether to log javascript console messages.
 |<<general-save-session,save-session>>|Whether to always save the open pages.
 |<<general-session-default-name,session-default-name>>|The name of the session to save by default, or empty for the last loaded session.
+|<<general-url-incdec-segments,url-incdec-segments>>|The URL segments where `:navigate increment/decrement` will search for a number.
 |==============
 
 .Quick reference for section ``ui''
@@ -47,6 +48,7 @@
 |<<ui-window-title-format,window-title-format>>|The format to use for the window title. The following placeholders are defined:
 |<<ui-hide-mouse-cursor,hide-mouse-cursor>>|Whether to hide the mouse cursor.
 |<<ui-modal-js-dialog,modal-js-dialog>>|Use standard JavaScript modal dialog for alert() and confirm()
+|<<ui-hide-wayland-decoration,hide-wayland-decoration>>|Hide the window decoration when using wayland (requires restart)
 |==============
 
 .Quick reference for section ``network''
@@ -159,6 +161,7 @@
 |<<content-cookies-store,cookies-store>>|Whether to store cookies.
 |<<content-host-block-lists,host-block-lists>>|List of URLs of lists which contain hosts to block.
 |<<content-host-blocking-enabled,host-blocking-enabled>>|Whether host blocking is enabled.
+|<<content-host-blocking-whitelist,host-blocking-whitelist>>|List of domains that should always be loaded, despite being ad-blocked.
 |==============
 
 .Quick reference for section ``hints''
@@ -169,7 +172,7 @@
 |<<hints-opacity,opacity>>|Opacity for hints.
 |<<hints-mode,mode>>|Mode to use for hints.
 |<<hints-chars,chars>>|Chars used for hint strings.
-|<<hints-min-chars,min-chars>>|Mininum number of chars used for hint strings.
+|<<hints-min-chars,min-chars>>|Minimum number of chars used for hint strings.
 |<<hints-scatter,scatter>>|Whether to scatter hint key chains (like Vimium) or not (like dwb).
 |<<hints-uppercase,uppercase>>|Make chars in hint strings uppercase.
 |<<hints-auto-follow,auto-follow>>|Whether to auto-follow a hint if there's only one left.
@@ -219,8 +222,10 @@
 |<<colors-tabs.bg.odd,tabs.bg.odd>>|Background color of unselected odd tabs.
 |<<colors-tabs.fg.even,tabs.fg.even>>|Foreground color of unselected even tabs.
 |<<colors-tabs.bg.even,tabs.bg.even>>|Background color of unselected even tabs.
-|<<colors-tabs.fg.selected,tabs.fg.selected>>|Foreground color of selected tabs.
-|<<colors-tabs.bg.selected,tabs.bg.selected>>|Background color of selected tabs.
+|<<colors-tabs.fg.selected.odd,tabs.fg.selected.odd>>|Foreground color of selected odd tabs.
+|<<colors-tabs.bg.selected.odd,tabs.bg.selected.odd>>|Background color of selected odd tabs.
+|<<colors-tabs.fg.selected.even,tabs.fg.selected.even>>|Foreground color of selected even tabs.
+|<<colors-tabs.bg.selected.even,tabs.bg.selected.even>>|Background color of selected even tabs.
 |<<colors-tabs.bg.bar,tabs.bg.bar>>|Background color of the tab bar.
 |<<colors-tabs.indicator.start,tabs.indicator.start>>|Color gradient start for the tab indicator.
 |<<colors-tabs.indicator.stop,tabs.indicator.stop>>|Color gradient end for the tab indicator.
@@ -454,6 +459,19 @@ The name of the session to save by default, or empty for the last loaded session
 
 Default: empty
 
+[[general-url-incdec-segments]]
+=== url-incdec-segments
+The URL segments where `:navigate increment/decrement` will search for a number.
+
+Valid values:
+
+ * +host+
+ * +path+
+ * +query+
+ * +anchor+
+
+Default: +pass:[path,query]+
+
 == ui
 General options related to the user interface.
 
@@ -605,6 +623,7 @@ The format to use for the window title. The following placeholders are defined:
 * `{title}`: The title of the current web page
 * `{title_sep}`: The string ` - ` if a title is set, empty otherwise.
 * `{id}`: The internal window ID of this window.
+* `{scroll_pos}`: The page scroll position.
 
 Default: +pass:[{perc}{title}{title_sep}qutebrowser]+
 
@@ -622,6 +641,17 @@ Default: +pass:[false]+
 [[ui-modal-js-dialog]]
 === modal-js-dialog
 Use standard JavaScript modal dialog for alert() and confirm()
+
+Valid values:
+
+ * +true+
+ * +false+
+
+Default: +pass:[false]+
+
+[[ui-hide-wayland-decoration]]
+=== hide-wayland-decoration
+Hide the window decoration when using wayland (requires restart)
 
 Valid values:
 
@@ -1079,6 +1109,7 @@ The format to use for the tab title. The following placeholders are defined:
 * `{title_sep}`: The string ` - ` if a title is set, empty otherwise.
 * `{index}`: The index of this tab.
 * `{id}`: The internal tab ID of this tab.
+* `{scroll_pos}`: The page scroll position.
 
 Default: +pass:[{index}: {title}]+
 
@@ -1433,6 +1464,16 @@ Valid values:
 
 Default: +pass:[true]+
 
+[[content-host-blocking-whitelist]]
+=== host-blocking-whitelist
+List of domains that should always be loaded, despite being ad-blocked.
+
+Domains may contain * and ? wildcards and are otherwise required to exactly match the requested domain.
+
+Local domains are always exempt from hostblocking.
+
+Default: +pass:[piwik.org]+
+
 == hints
 Hinting settings.
 
@@ -1467,7 +1508,7 @@ Default: +pass:[asdfghjkl]+
 
 [[hints-min-chars]]
 === min-chars
-Mininum number of chars used for hint strings.
+Minimum number of chars used for hint strings.
 
 Default: +pass:[1]+
 
@@ -1769,17 +1810,29 @@ Background color of unselected even tabs.
 
 Default: +pass:[darkgrey]+
 
-[[colors-tabs.fg.selected]]
-=== tabs.fg.selected
-Foreground color of selected tabs.
+[[colors-tabs.fg.selected.odd]]
+=== tabs.fg.selected.odd
+Foreground color of selected odd tabs.
 
 Default: +pass:[white]+
 
-[[colors-tabs.bg.selected]]
-=== tabs.bg.selected
-Background color of selected tabs.
+[[colors-tabs.bg.selected.odd]]
+=== tabs.bg.selected.odd
+Background color of selected odd tabs.
 
 Default: +pass:[black]+
+
+[[colors-tabs.fg.selected.even]]
+=== tabs.fg.selected.even
+Foreground color of selected even tabs.
+
+Default: +pass:[${tabs.fg.selected.odd}]+
+
+[[colors-tabs.bg.selected.even]]
+=== tabs.bg.selected.even
+Background color of selected even tabs.
+
+Default: +pass:[${tabs.bg.selected.odd}]+
 
 [[colors-tabs.bg.bar]]
 === tabs.bg.bar

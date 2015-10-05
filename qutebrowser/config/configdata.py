@@ -225,6 +225,11 @@ def data(readonly=False):
              "The name of the session to save by default, or empty for the "
              "last loaded session."),
 
+            ('url-incdec-segments',
+             SettingValue(typ.URLSegmentList(none_ok=True), 'path,query'),
+             "The URL segments where `:navigate increment/decrement` will "
+             "search for a number."),
+
             readonly=readonly
         )),
 
@@ -299,7 +304,8 @@ def data(readonly=False):
 
             ('window-title-format',
              SettingValue(typ.FormatString(fields=['perc', 'perc_raw', 'title',
-                                                   'title_sep', 'id']),
+                                                   'title_sep', 'id',
+                                                   'scroll_pos']),
                           '{perc}{title}{title_sep}qutebrowser'),
              "The format to use for the window title. The following "
              "placeholders are defined:\n\n"
@@ -308,7 +314,8 @@ def data(readonly=False):
              "* `{title}`: The title of the current web page\n"
              "* `{title_sep}`: The string ` - ` if a title is set, empty "
              "otherwise.\n"
-             "* `{id}`: The internal window ID of this window."),
+             "* `{id}`: The internal window ID of this window.\n"
+             "* `{scroll_pos}`: The page scroll position."),
 
             ('hide-mouse-cursor',
              SettingValue(typ.Bool(), 'false'),
@@ -317,6 +324,11 @@ def data(readonly=False):
             ('modal-js-dialog',
              SettingValue(typ.Bool(), 'false'),
              "Use standard JavaScript modal dialog for alert() and confirm()"),
+
+            ('hide-wayland-decoration',
+             SettingValue(typ.Bool(), 'false'),
+             "Hide the window decoration when using wayland "
+             "(requires restart)"),
 
             readonly=readonly
         )),
@@ -529,7 +541,7 @@ def data(readonly=False):
             ('title-format',
              SettingValue(typ.FormatString(
                  fields=['perc', 'perc_raw', 'title', 'title_sep', 'index',
-                         'id']), '{index}: {title}'),
+                         'id', 'scroll_pos']), '{index}: {title}'),
              "The format to use for the tab title. The following placeholders "
              "are defined:\n\n"
              "* `{perc}`: The percentage as a string like `[10%]`.\n"
@@ -538,7 +550,8 @@ def data(readonly=False):
              "* `{title_sep}`: The string ` - ` if a title is set, empty "
              "otherwise.\n"
              "* `{index}`: The index of this tab.\n"
-             "* `{id}`: The internal tab ID of this tab."),
+             "* `{id}`: The internal tab ID of this tab.\n"
+             "* `{scroll_pos}`: The page scroll position."),
 
             ('mousewheel-tab-switching',
              SettingValue(typ.Bool(), 'true'),
@@ -735,6 +748,14 @@ def data(readonly=False):
              SettingValue(typ.Bool(), 'true'),
              "Whether host blocking is enabled."),
 
+            ('host-blocking-whitelist',
+             SettingValue(typ.List(none_ok=True), 'piwik.org'),
+             "List of domains that should always be loaded, despite being "
+             "ad-blocked.\n\n"
+             "Domains may contain * and ? wildcards and are otherwise "
+             "required to exactly match the requested domain.\n\n"
+             "Local domains are always exempt from hostblocking."),
+
             readonly=readonly
         )),
 
@@ -757,7 +778,7 @@ def data(readonly=False):
 
             ('min-chars',
              SettingValue(typ.Int(minval=1), '1'),
-             "Mininum number of chars used for hint strings."),
+             "Minimum number of chars used for hint strings."),
 
             ('scatter',
              SettingValue(typ.Bool(), 'true'),
@@ -960,13 +981,21 @@ def data(readonly=False):
              SettingValue(typ.QtColor(), 'darkgrey'),
              "Background color of unselected even tabs."),
 
-            ('tabs.fg.selected',
+            ('tabs.fg.selected.odd',
              SettingValue(typ.QtColor(), 'white'),
-             "Foreground color of selected tabs."),
+             "Foreground color of selected odd tabs."),
 
-            ('tabs.bg.selected',
+            ('tabs.bg.selected.odd',
              SettingValue(typ.QtColor(), 'black'),
-             "Background color of selected tabs."),
+             "Background color of selected odd tabs."),
+
+            ('tabs.fg.selected.even',
+             SettingValue(typ.QtColor(), '${tabs.fg.selected.odd}'),
+             "Foreground color of selected even tabs."),
+
+            ('tabs.bg.selected.even',
+             SettingValue(typ.QtColor(), '${tabs.bg.selected.odd}'),
+             "Background color of selected even tabs."),
 
             ('tabs.bg.bar',
              SettingValue(typ.QtColor(), '#555555'),

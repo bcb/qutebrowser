@@ -112,6 +112,15 @@ class TabWidget(QTabWidget):
         fields['index'] = idx + 1
         fields['id'] = widget.tab_id
         fields['title_sep'] = ' - ' if page_title else ''
+        y = widget.scroll_pos[1]
+        if y <= 0:
+            scroll_pos = 'top'
+        elif y >= 100:
+            scroll_pos = 'bot'
+        else:
+            scroll_pos = '{:2}%'.format(y)
+
+        fields['scroll_pos'] = scroll_pos
 
         fmt = config.get('tabs', 'title-format')
         self.tabBar().setTabText(idx, fmt.format(**fields))
@@ -300,7 +309,7 @@ class TabBar(QTabBar):
 
     def refresh(self):
         """Properly repaint the tab bar and relayout tabs."""
-        # This is a horrible hack, but we need to do this so the underlaying Qt
+        # This is a horrible hack, but we need to do this so the underlying Qt
         # code sets layoutDirty so it actually relayouts the tabs.
         self.setIconSize(self.iconSize())
 
@@ -398,28 +407,43 @@ class TabBar(QTabBar):
         else:
             # If we *do* have enough space, tabs should occupy the whole window
             # width.
-            size = QSize(self.width() / self.count(), height)
+            width = self.width() / self.count()
+            # If width is not divisible by count, add a pixel to some tabs so
+            # that there is no ugly leftover space.
+            if index < self.width() % self.count():
+                width += 1
+            size = QSize(width, height)
         qtutils.ensure_valid(size)
         return size
 
     def paintEvent(self, _e):
         """Override paintEvent to draw the tabs like we want to."""
+        # pylint: disable=bad-config-call
+        # WORKAROUND for https://bitbucket.org/logilab/astroid/issue/104
         p = QStylePainter(self)
         selected = self.currentIndex()
         for idx in range(self.count()):
             tab = QStyleOptionTab()
             self.initStyleOption(tab, idx)
+
+            bg_parts = ['tabs', 'bg']
+            fg_parts = ['tabs', 'fg']
             if idx == selected:
-                bg_color = config.get('colors', 'tabs.bg.selected')
-                fg_color = config.get('colors', 'tabs.fg.selected')
-            elif idx % 2:
-                bg_color = config.get('colors', 'tabs.bg.odd')
-                fg_color = config.get('colors', 'tabs.fg.odd')
+                bg_parts.append('selected')
+                fg_parts.append('selected')
+
+            if idx % 2:
+                bg_parts.append('odd')
+                fg_parts.append('odd')
             else:
-                bg_color = config.get('colors', 'tabs.bg.even')
-                fg_color = config.get('colors', 'tabs.fg.even')
+                bg_parts.append('even')
+                fg_parts.append('even')
+
+            bg_color = config.get('colors', '.'.join(bg_parts))
+            fg_color = config.get('colors', '.'.join(fg_parts))
             tab.palette.setColor(QPalette.Window, bg_color)
             tab.palette.setColor(QPalette.WindowText, fg_color)
+
             try:
                 indicator_color = self.tab_data(idx, 'indicator-color')
             except KeyError:

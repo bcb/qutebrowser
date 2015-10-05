@@ -33,7 +33,7 @@ class HTTPGetStub(httpclient.HTTPClient):
 
     Attributes:
         url: the last url used by get()
-        _success: Wether get() will emit a success signal.
+        _success: Whether get() will emit a success signal.
     """
 
     def __init__(self, success=True, json=None):
@@ -52,7 +52,7 @@ class HTTPGetStub(httpclient.HTTPClient):
             self.error.emit("error")
 
 
-def test_constructor():
+def test_constructor(qapp):
     client = autoupdate.PyPIVersionClient()
     assert isinstance(client._client, httpclient.HTTPClient)
 

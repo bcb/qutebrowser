@@ -26,6 +26,8 @@ import sys
 import collections
 import itertools
 import logging
+import textwrap
+import warnings
 
 import pytest
 
@@ -39,15 +41,51 @@ from qutebrowser.utils import objreg
 from PyQt5.QtNetwork import QNetworkCookieJar
 
 
-def pytest_collection_modifyitems(items):
-    """Automatically add a 'gui' marker to all gui-related tests.
+def _apply_platform_markers(item):
+    """Apply a skip marker to a given item."""
+    markers = [
+        ('posix', os.name != 'posix', "Requires a POSIX os"),
+        ('windows', os.name != 'nt', "Requires Windows"),
+        ('linux', not sys.platform.startswith('linux'), "Requires Linux"),
+        ('osx', sys.platform != 'darwin', "Requires OS X"),
+        ('not_osx', sys.platform == 'darwin', "Skipped on OS X"),
+        ('not_frozen', getattr(sys, 'frozen', False),
+            "Can't be run when frozen"),
+        ('frozen', not getattr(sys, 'frozen', False),
+            "Can only run when frozen"),
+    ]
 
-    pytest hook called after collection has been performed, adds a marker
-    named "gui" which can be used to filter gui tests from the command line.
+    for searched_marker, condition, default_reason in markers:
+        marker = item.get_marker(searched_marker)
+        if not marker or not condition:
+            continue
+
+        if 'reason' in marker.kwargs:
+            reason = '{}: {}'.format(default_reason,
+                                        marker.kwargs['reason'])
+            del marker.kwargs['reason']
+        else:
+            reason = default_reason + '.'
+        skipif_marker = pytest.mark.skipif(condition, *marker.args,
+                                           reason=reason, **marker.kwargs)
+        item.add_marker(skipif_marker)
+
+
+def pytest_collection_modifyitems(items):
+    """Handle custom markers.
+
+    pytest hook called after collection has been performed.
+
+    Adds a marker named "gui" which can be used to filter gui tests from the
+    command line.
+
     For example:
 
         py.test -m "not gui"  # run all tests except gui tests
         py.test -m "gui"  # run only gui tests
+
+    It also handles the platform specific markers by translating them to skipif
+    markers.
 
     Args:
         items: list of _pytest.main.Node items, where each item represents
@@ -60,7 +98,8 @@ def pytest_collection_modifyitems(items):
         if 'qapp' in getattr(item, 'fixturenames', ()):
             item.add_marker('gui')
             if sys.platform == 'linux' and not os.environ.get('DISPLAY', ''):
-                if 'CI' in os.environ:
+                if ('CI' in os.environ and
+                        not os.environ.get('QUTE_NO_DISPLAY_OK', '')):
                     raise Exception("No display available on CI!")
                 skip_marker = pytest.mark.skipif(
                     True, reason="No DISPLAY available")
@@ -75,24 +114,14 @@ def pytest_collection_modifyitems(items):
             if module_root_dir == 'integration':
                 item.add_marker(pytest.mark.integration)
 
+        _apply_platform_markers(item)
 
-def pytest_runtest_setup(item):
-    """Add some custom markers."""
-    if not isinstance(item, item.Function):
-        return
 
-    if item.get_marker('posix') and os.name != 'posix':
-        pytest.skip("Requires a POSIX os.")
-    elif item.get_marker('windows') and os.name != 'nt':
-        pytest.skip("Requires Windows.")
-    elif item.get_marker('linux') and not sys.platform.startswith('linux'):
-        pytest.skip("Requires Linux.")
-    elif item.get_marker('osx') and sys.platform != 'darwin':
-        pytest.skip("Requires OS X.")
-    elif item.get_marker('not_frozen') and getattr(sys, 'frozen', False):
-        pytest.skip("Can't be run when frozen!")
-    elif item.get_marker('frozen') and not getattr(sys, 'frozen', False):
-        pytest.skip("Can only run when frozen!")
+@pytest.fixture(scope='session')
+def qapp(qapp):
+    """Change the name of the QApplication instance."""
+    qapp.setApplicationName('qute_test')
+    return qapp
 
 
 class WinRegistryHelper:
@@ -292,3 +321,18 @@ def cookiejar_and_cache(stubs):
     yield
     objreg.delete('cookie-jar')
     objreg.delete('cache')
+
+
+@pytest.fixture
+def py_proc():
+    """Get a python executable and args list which executes the given code."""
+    def func(code):
+        return (sys.executable, ['-c', textwrap.dedent(code.strip('\n'))])
+    return func
+
+
+@pytest.yield_fixture(autouse=True)
+def fail_tests_on_warnings():
+    warnings.simplefilter('error')
+    yield
+    warnings.resetwarnings()

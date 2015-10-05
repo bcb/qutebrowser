@@ -179,16 +179,25 @@ class TestGitStrSubprocess:
         """
         def _git(*args):
             """Helper closure to call git."""
-            env = {
+            env = os.environ.copy()
+            env.update({
                 'GIT_AUTHOR_NAME': 'qutebrowser testsuite',
                 'GIT_AUTHOR_EMAIL': 'mail@qutebrowser.org',
                 'GIT_AUTHOR_DATE': 'Thu  1 Jan 01:00:00 CET 1970',
                 'GIT_COMMITTER_NAME': 'qutebrowser testsuite',
                 'GIT_COMMITTER_EMAIL': 'mail@qutebrowser.org',
                 'GIT_COMMITTER_DATE': 'Thu  1 Jan 01:00:00 CET 1970',
-            }
-            subprocess.check_call(['git', '-C', str(tmpdir)] + list(args),
-                                  env=env)
+            })
+            if os.name == 'nt':
+                # If we don't call this with shell=True it might fail under
+                # some environments on Windows...
+                # http://bugs.python.org/issue24493
+                subprocess.check_call(
+                    'git -C "{}" {}'.format(tmpdir, ' '.join(args)),
+                    env=env, shell=True)
+            else:
+                subprocess.check_call(
+                    ['git', '-C', str(tmpdir)] + list(args), env=env)
 
         (tmpdir / 'file').write_text("Hello World!", encoding='utf-8')
         _git('init')
@@ -451,25 +460,16 @@ class TestOsInfo:
 
     """Tests for _os_info."""
 
-    @pytest.mark.parametrize('dist, dist_str', [
-        (('x', '', 'y'), 'x, y'),
-        (('a', 'b', 'c'), 'a, b, c'),
-        (('', '', ''), ''),
-    ])
-    def test_linux_fake(self, monkeypatch, dist, dist_str):
+    def test_linux_fake(self, monkeypatch):
         """Test with a fake Linux.
 
-        Args:
-            dist: The value to set platform.dist() to.
-            dist_str: The expected distribution string in version._os_info().
+        No args because osver is set to '' if the OS is linux.
         """
         monkeypatch.setattr('qutebrowser.utils.version.sys.platform', 'linux')
         monkeypatch.setattr('qutebrowser.utils.version._release_info',
                             lambda: [('releaseinfo', 'Hello World')])
-        monkeypatch.setattr('qutebrowser.utils.version.platform.dist',
-                            lambda: dist)
         ret = version._os_info()
-        expected = ['OS Version: {}'.format(dist_str), '',
+        expected = ['OS Version: ', '',
                     '--- releaseinfo ---', 'Hello World']
         assert ret == expected
 
@@ -543,7 +543,7 @@ class FakeQSslSocket:
     def sslLibraryVersionString(self):
         """Fake for QSslSocket::sslLibraryVersionString()."""
         if self._version is None:
-            raise AssertionError("Got valled with version None!")
+            raise AssertionError("Got called with version None!")
         return self._version
 
 

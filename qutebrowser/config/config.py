@@ -42,6 +42,9 @@ from qutebrowser.utils import (message, objreg, utils, standarddir, log,
 from qutebrowser.utils.usertypes import Completion
 
 
+UNSET = object()
+
+
 class change_filter:  # pylint: disable=invalid-name
 
     """Decorator to filter calls based on a config section/option matching.
@@ -324,10 +327,12 @@ class ConfigManager(QObject):
     RENAMED_OPTIONS = {
         ('colors', 'tab.fg.odd'): 'tabs.fg.odd',
         ('colors', 'tab.fg.even'): 'tabs.fg.even',
-        ('colors', 'tab.fg.selected'): 'tabs.fg.selected',
+        ('colors', 'tab.fg.selected'): 'tabs.fg.selected.odd',
+        ('colors', 'tabs.fg.selected'): 'tabs.fg.selected.odd',
         ('colors', 'tab.bg.odd'): 'tabs.bg.odd',
         ('colors', 'tab.bg.even'): 'tabs.bg.even',
-        ('colors', 'tab.bg.selected'): 'tabs.bg.selected',
+        ('colors', 'tab.bg.selected'): 'tabs.bg.selected.odd',
+        ('colors', 'tabs.bg.selected'): 'tabs.bg.selected.odd',
         ('colors', 'tab.bg.bar'): 'tabs.bg.bar',
         ('colors', 'tab.indicator.start'): 'tabs.indicator.start',
         ('colors', 'tab.indicator.stop'): 'tabs.indicator.stop',
@@ -619,8 +624,12 @@ class ConfigManager(QObject):
         return existed
 
     @functools.lru_cache()
-    def get(self, sectname, optname, raw=False, transformed=True):
+    def get(self, sectname, optname, raw=False, transformed=True,
+            fallback=UNSET):
         """Get the value from a section/option.
+
+        We don't support the vars argument from configparser.get as it's not
+        hashable.
 
         Args:
             sectname: The section to get the option from.
@@ -634,13 +643,18 @@ class ConfigManager(QObject):
         if not self._initialized:
             raise Exception("get got called before initialization was "
                             "complete!")
+
         try:
             sect = self.sections[sectname]
         except KeyError:
+            if fallback is not UNSET:
+                return fallback
             raise configexc.NoSectionError(sectname)
         try:
             val = sect[optname]
         except KeyError:
+            if fallback is not UNSET:
+                return fallback
             raise configexc.NoOptionError(optname, sectname)
         if raw:
             return val.value()

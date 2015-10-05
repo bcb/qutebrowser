@@ -23,6 +23,7 @@ import collections
 import itertools
 import os.path
 import base64
+import warnings
 
 import pytest
 from PyQt5.QtCore import QUrl
@@ -67,6 +68,34 @@ class NetworkProxy(QNetworkProxy):
         return utils.get_repr(self, type=self.type(), hostName=self.hostName(),
                               port=self.port(), user=self.user(),
                               password=self.password())
+
+
+class RegexEq:
+
+    """A class to compare regex objects."""
+
+    def __init__(self, pattern, flags=0):
+        # We compile the regex because re.compile also adds flags defined in
+        # the pattern and implicit flags to its .flags.
+        # See https://docs.python.org/3/library/re.html#re.regex.flags
+        compiled = re.compile(pattern, flags)
+        self.pattern = compiled.pattern
+        self.flags = compiled.flags
+        self._user_flags = flags
+
+    def __eq__(self, other):
+        try:
+            # Works for RegexEq objects and re.compile objects
+            return (self.pattern, self.flags) == (other.pattern, other.flags)
+        except AttributeError:
+            return NotImplemented
+
+    def __repr__(self):
+        if self._user_flags:
+            return "RegexEq({!r}, flags={})".format(self.pattern,
+                                                    self._user_flags)
+        else:
+            return "RegexEq({!r})".format(self.pattern)
 
 
 @pytest.fixture
@@ -129,6 +158,10 @@ class TestValidValues:
     ])
     def test_repr(self, klass, args, expected):
         assert repr(klass(*args)) == expected
+
+    def test_empty(self, klass):
+        with pytest.raises(ValueError):
+            klass()
 
 
 class TestBaseType:
@@ -333,6 +366,81 @@ class TestList:
     ])
     def test_transform(self, klass, val, expected):
         assert klass().transform(val) == expected
+
+
+class FlagListSubclass(configtypes.FlagList):
+
+    """A subclass of FlagList which we use in tests.
+
+    Valid values are 'foo', 'bar' and 'baz'.
+    """
+
+    valid_values = configtypes.ValidValues('foo', 'bar', 'baz')
+    combinable_values = ['foo', 'bar']
+
+
+class TestFlagList:
+
+    """Test FlagList."""
+
+    @pytest.fixture
+    def klass(self):
+        return FlagListSubclass
+
+    @pytest.fixture
+    def klass_valid_none(self):
+        """Return a FlagList with valid_values = None"""
+        return configtypes.FlagList
+
+    @pytest.mark.parametrize('val', ['', 'foo', 'foo,bar', 'foo,'])
+    def test_validate_valid(self, klass, val):
+        klass(none_ok=True).validate(val)
+
+    @pytest.mark.parametrize('val', ['qux', 'foo,qux', 'foo,foo'])
+    def test_validate_invalid(self, klass, val):
+        with pytest.raises(configexc.ValidationError):
+            klass(none_ok=True).validate(val)
+
+    @pytest.mark.parametrize('val', ['', 'foo,', 'foo,,bar'])
+    def test_validate_empty_value_not_okay(self, klass, val):
+        with pytest.raises(configexc.ValidationError):
+            klass(none_ok=False).validate(val)
+
+    @pytest.mark.parametrize('val, expected', [
+        ('', None),
+        ('foo', ['foo']),
+        ('foo,bar', ['foo', 'bar']),
+    ])
+    def test_transform(self, klass, val, expected):
+        assert klass().transform(val) == expected
+
+    @pytest.mark.parametrize('val', ['spam', 'spam,eggs'])
+    def test_validate_values_none(self, klass_valid_none, val):
+        klass_valid_none().validate(val)
+
+    def test_complete(self, klass):
+        """Test completing by doing some samples."""
+        completions = [e[0] for e in klass().complete()]
+        assert 'foo' in completions
+        assert 'bar' in completions
+        assert 'baz' in completions
+        assert 'foo,bar' in completions
+        for val in completions:
+            assert 'baz,' not in val
+            assert ',baz' not in val
+
+    def test_complete_all_valid_values(self, klass):
+        inst = klass()
+        inst.combinable_values = None
+        completions = [e[0] for e in inst.complete()]
+        assert 'foo' in completions
+        assert 'bar' in completions
+        assert 'baz' in completions
+        assert 'foo,bar' in completions
+        assert 'foo,baz' in completions
+
+    def test_complete_no_valid_values(self, klass_valid_none):
+        assert klass_valid_none().complete() is None
 
 
 class TestBool:
@@ -1036,12 +1144,55 @@ class TestRegex:
         with pytest.raises(configexc.ValidationError):
             klass().validate(val)
 
+    @pytest.mark.parametrize('val', [
+        r'foo\Xbar',
+        r'foo\Cbar',
+    ])
+    def test_validate_maybe_valid(self, klass, val):
+        """Those values are valid on some Python versions (and systems?).
+
+        On others, they raise a DeprecationWarning because of an invalid
+        escape. This tests makes sure this gets translated to a
+        ValidationError.
+        """
+        try:
+            klass().validate(val)
+        except configexc.ValidationError:
+            pass
+
     @pytest.mark.parametrize('val, expected', [
-        (r'foobar', re.compile(r'foobar')),
+        (r'foobar', RegexEq(r'foobar')),
         ('', None),
     ])
     def test_transform_empty(self, klass, val, expected):
         assert klass().transform(val) == expected
+
+    @pytest.mark.parametrize('warning', [
+        Warning('foo'), DeprecationWarning('foo'),
+    ])
+    def test_passed_warnings(self, mocker, klass, warning):
+        """Simulate re.compile showing a warning we don't know about yet.
+
+        The warning should be passed.
+        """
+        m = mocker.patch('qutebrowser.config.configtypes.re')
+        m.compile.side_effect = lambda *args: warnings.warn(warning)
+        m.error = re.error
+        with pytest.raises(type(warning)):
+            klass().validate('foo')
+
+    def test_bad_pattern_warning(self, mocker, klass):
+        """Test a simulated bad pattern warning.
+
+        This only seems to happen with Python 3.5, so we simulate this for
+        better coverage.
+        """
+        m = mocker.patch('qutebrowser.config.configtypes.re')
+        m.compile.side_effect = lambda *args: warnings.warn(r'bad escape \C',
+                                                            DeprecationWarning)
+        m.error = re.error
+        with pytest.raises(configexc.ValidationError):
+            klass().validate('foo')
 
 
 class TestRegexList:
@@ -1069,11 +1220,27 @@ class TestRegexList:
         with pytest.raises(configexc.ValidationError):
             klass().validate(val)
 
+    @pytest.mark.parametrize('val', [
+        r'foo\Xbar',
+        r'foo\Cbar',
+    ])
+    def test_validate_maybe_valid(self, klass, val):
+        """Those values are valid on some Python versions (and systems?).
+
+        On others, they raise a DeprecationWarning because of an invalid
+        escape. This tests makes sure this gets translated to a
+        ValidationError.
+        """
+        try:
+            klass().validate(val)
+        except configexc.ValidationError:
+            pass
+
     @pytest.mark.parametrize('val, expected', [
-        ('foo', [re.compile('foo')]),
-        ('foo,bar,baz', [re.compile('foo'), re.compile('bar'),
-                         re.compile('baz')]),
-        ('foo,,bar', [re.compile('foo'), None, re.compile('bar')]),
+        ('foo', [RegexEq('foo')]),
+        ('foo,bar,baz', [RegexEq('foo'), RegexEq('bar'),
+                         RegexEq('baz')]),
+        ('foo,,bar', [RegexEq('foo'), None, RegexEq('bar')]),
         ('', None),
     ])
     def test_transform(self, klass, val, expected):
@@ -1873,3 +2040,29 @@ class TestUserAgent:
     def test_complete(self, klass):
         """Simple smoke test for completion."""
         klass().complete()
+
+
+@pytest.mark.parametrize('first, second, equal', [
+    (re.compile('foo'), RegexEq('foo'), True),
+    (RegexEq('bar'), re.compile('bar'), True),
+    (RegexEq('qwer'), RegexEq('qwer'), True),
+    (re.compile('qux'), RegexEq('foo'), False),
+    (RegexEq('spam'), re.compile('eggs'), False),
+    (RegexEq('qwer'), RegexEq('rewq'), False),
+
+    (re.compile('foo', re.I), RegexEq('foo', re.I), True),
+    (RegexEq('bar', re.M), re.compile('bar', re.M), True),
+    (re.compile('qux', re.M), RegexEq('qux', re.I), False),
+    (RegexEq('spam', re.S), re.compile('eggs', re.S), False),
+
+    (re.compile('(?i)foo'), RegexEq('(?i)foo'), True),
+    (re.compile('(?i)bar'), RegexEq('bar'), False),
+])
+def test_regex_eq(first, second, equal):
+    if equal:
+        # Assert that the check is commutative
+        assert first == second
+        assert second == first
+    else:
+        assert first != second
+        assert second != first

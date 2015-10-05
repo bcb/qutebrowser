@@ -19,21 +19,13 @@
 
 """Tests for qutebrowser.misc.guiprocess."""
 
-import os
-import sys
 import json
-import textwrap
 import logging
 
 import pytest
 from PyQt5.QtCore import QProcess, QIODevice
 
 from qutebrowser.misc import guiprocess
-
-
-def _py_proc(code):
-    """Get a python executable and args list which executes the given code."""
-    return (sys.executable, ['-c', textwrap.dedent(code.strip('\n'))])
 
 
 @pytest.fixture(autouse=True)
@@ -45,9 +37,6 @@ def guiprocess_message_mock(message_mock):
 @pytest.yield_fixture()
 def proc(qtbot):
     """A fixture providing a GUIProcess and cleaning it up after the test."""
-    if os.name == 'nt':
-        # WORKAROUND for https://github.com/pytest-dev/pytest-qt/issues/67
-        pytest.skip("Test is flaky on Windows...")
     p = guiprocess.GUIProcess(0, 'testprocess')
     yield p
     if p._proc.state() == QProcess.Running:
@@ -66,11 +55,11 @@ def fake_proc(monkeypatch, stubs):
 
 
 @pytest.mark.not_frozen
-def test_start(proc, qtbot, guiprocess_message_mock):
+def test_start(proc, qtbot, guiprocess_message_mock, py_proc):
     """Test simply starting a process."""
     with qtbot.waitSignals([proc.started, proc.finished], raising=True,
                            timeout=10000):
-        argv = _py_proc("import sys; print('test'); sys.exit(0)")
+        argv = py_proc("import sys; print('test'); sys.exit(0)")
         proc.start(*argv)
 
     assert not guiprocess_message_mock.messages
@@ -78,13 +67,13 @@ def test_start(proc, qtbot, guiprocess_message_mock):
 
 
 @pytest.mark.not_frozen
-def test_start_verbose(proc, qtbot, guiprocess_message_mock):
+def test_start_verbose(proc, qtbot, guiprocess_message_mock, py_proc):
     """Test starting a process verbosely."""
     proc.verbose = True
 
     with qtbot.waitSignals([proc.started, proc.finished], raising=True,
                            timeout=10000):
-        argv = _py_proc("import sys; print('test'); sys.exit(0)")
+        argv = py_proc("import sys; print('test'); sys.exit(0)")
         proc.start(*argv)
 
     msgs = guiprocess_message_mock.messages
@@ -95,15 +84,13 @@ def test_start_verbose(proc, qtbot, guiprocess_message_mock):
     assert bytes(proc._proc.readAll()).rstrip() == b'test'
 
 
-# WORKAROUND for https://github.com/pytest-dev/pytest-qt/issues/67
-@pytest.mark.skipif(os.name == 'nt', reason="Test is flaky on Windows...")
 @pytest.mark.not_frozen
-def test_start_env(monkeypatch, qtbot):
+def test_start_env(monkeypatch, qtbot, py_proc):
     monkeypatch.setenv('QUTEBROWSER_TEST_1', '1')
     env = {'QUTEBROWSER_TEST_2': '2'}
     proc = guiprocess.GUIProcess(0, 'testprocess', additional_env=env)
 
-    argv = _py_proc("""
+    argv = py_proc("""
         import os
         import json
         env = dict(os.environ)
@@ -123,11 +110,11 @@ def test_start_env(monkeypatch, qtbot):
 
 @pytest.mark.not_frozen
 @pytest.mark.qt_log_ignore('QIODevice::read.*: WriteOnly device')
-def test_start_mode(proc, qtbot):
+def test_start_mode(proc, qtbot, py_proc):
     """Test simply starting a process with mode parameter."""
     with qtbot.waitSignals([proc.started, proc.finished], raising=True,
                            timeout=10000):
-        argv = _py_proc("import sys; print('test'); sys.exit(0)")
+        argv = py_proc("import sys; print('test'); sys.exit(0)")
         proc.start(*argv, mode=QIODevice.NotOpen)
 
     assert not proc._proc.readAll()
@@ -153,25 +140,25 @@ def test_start_detached_error(fake_proc, guiprocess_message_mock):
 
 
 @pytest.mark.not_frozen
-def test_double_start(qtbot, proc):
+def test_double_start(qtbot, proc, py_proc):
     """Test starting a GUIProcess twice."""
     with qtbot.waitSignal(proc.started, raising=True, timeout=10000):
-        argv = _py_proc("import time; time.sleep(10)")
+        argv = py_proc("import time; time.sleep(10)")
         proc.start(*argv)
     with pytest.raises(ValueError):
         proc.start('', [])
 
 
 @pytest.mark.not_frozen
-def test_double_start_finished(qtbot, proc):
+def test_double_start_finished(qtbot, proc, py_proc):
     """Test starting a GUIProcess twice (with the first call finished)."""
     with qtbot.waitSignals([proc.started, proc.finished], raising=True,
                            timeout=10000):
-        argv = _py_proc("import sys; sys.exit(0)")
+        argv = py_proc("import sys; sys.exit(0)")
         proc.start(*argv)
     with qtbot.waitSignals([proc.started, proc.finished], raising=True,
                            timeout=10000):
-        argv = _py_proc("import sys; sys.exit(0)")
+        argv = py_proc("import sys; sys.exit(0)")
         proc.start(*argv)
 
 
@@ -183,10 +170,21 @@ def test_cmd_args(fake_proc):
     assert (fake_proc.cmd, fake_proc.args) == (cmd, args)
 
 
+def test_start_logging(fake_proc, caplog):
+    """Make sure that starting logs the executed commandline."""
+    cmd = 'does_not_exist'
+    args = ['arg', 'arg with spaces']
+    with caplog.atLevel(logging.DEBUG):
+        fake_proc.start(cmd, args)
+    msgs = [e.msg for e in caplog.records()]
+    assert msgs == ["Starting process.",
+                    "Executing: does_not_exist arg 'arg with spaces'"]
+
+
 def test_error(qtbot, proc, caplog, guiprocess_message_mock):
     """Test the process emitting an error."""
     with caplog.atLevel(logging.ERROR, 'message'):
-        with qtbot.waitSignal(proc.error, raising=True):
+        with qtbot.waitSignal(proc.error, raising=True, timeout=5000):
             proc.start('this_does_not_exist_either', [])
 
     msg = guiprocess_message_mock.getmsg(guiprocess_message_mock.Level.error,
@@ -197,9 +195,9 @@ def test_error(qtbot, proc, caplog, guiprocess_message_mock):
 
 
 @pytest.mark.not_frozen
-def test_exit_unsuccessful(qtbot, proc, guiprocess_message_mock):
+def test_exit_unsuccessful(qtbot, proc, guiprocess_message_mock, py_proc):
     with qtbot.waitSignal(proc.finished, raising=True, timeout=10000):
-        proc.start(*_py_proc('import sys; sys.exit(1)'))
+        proc.start(*py_proc('import sys; sys.exit(1)'))
 
     msg = guiprocess_message_mock.getmsg(guiprocess_message_mock.Level.error)
     assert msg.text == "Testprocess exited with status 1."
