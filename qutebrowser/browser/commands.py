@@ -394,7 +394,8 @@ class CommandDispatcher:
                                         window=newtab.win_id)
         idx = new_tabbed_browser.indexOf(newtab)
         new_tabbed_browser.set_page_title(idx, cur_title)
-        new_tabbed_browser.setTabIcon(idx, curtab.icon())
+        if config.get('tabs', 'show-favicons'):
+            new_tabbed_browser.setTabIcon(idx, curtab.icon())
         newtab.keep_icon = True
         newtab.setZoomFactor(curtab.zoomFactor())
         history = qtutils.serialize(curtab.history())
@@ -948,7 +949,9 @@ class CommandDispatcher:
         useful here.
 
         Args:
-            userscript: Run the command as a userscript.
+            userscript: Run the command as a userscript. Either store the
+                        userscript in `~/.local/share/qutebrowser/userscripts`
+                        (or `$XDG_DATA_DIR`), or use an absolute path.
             verbose: Show notifications when the command started/exited.
             detach: Whether the command should be detached from qutebrowser.
             cmdline: The commandline to execute.

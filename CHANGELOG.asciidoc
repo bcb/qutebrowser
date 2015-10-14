@@ -31,17 +31,25 @@ Added
   `tabs -> title-format`.
 - New setting `general -> url-incdec-segments` to configure which segments of
   the URL should be affected by `:navigate increment/decrement`.
+- New `--target` argument to specify how URLs should be opened in an existing
+  instance.
 
 Changed
 ~~~~~~~
 
 - The `colors -> tabs.bg/fg.selected` option got split into
   `tabs.bg/fg.selected.odd/even`.
+- `:spawn --userscript` and `:hint` with the `userscript` target now look up
+  relative paths in `~/.local/share/qutebrowser/userscripts` or
+  `$XDG_DATA_DIR`. Using a binary in `$PATH` won't work anymore with
+  `--userscript`.
 
 Fixed
 ~~~~~
 
 - Fixed displaying of web history if `web-history-max-items` is set to -1.
+- Cloned tabs now don't display favicons anymore if show-favicons is False.
+- Fixed a crash when clicking a bookmark name and pressing `Ctrl-D`.
 
 v0.4.1
 ------
@@ -473,7 +481,7 @@ Removed
 Fixed
 ~~~~~
 
-* Fix rare exception when a key is pressed shorly after opening a window
+* Fix rare exception when a key is pressed shortly after opening a window
 * Fix exception with certain invalid URLs like `http:foo:0`
 * Work around Qt bug which renders checkboxes on OS X unusable
 * Fix exception when a local files can't be read in `:adblock-update`

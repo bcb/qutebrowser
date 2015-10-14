@@ -31,8 +31,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QObject, Qt
 from PyQt5.QtNetwork import QLocalSocket, QLocalServer, QAbstractSocket
 
 import qutebrowser
-from qutebrowser.utils import (log, usertypes, error, objreg, standarddir,
-                               qtutils)
+from qutebrowser.utils import log, usertypes, error, objreg, standarddir
 
 
 CONNECT_TIMEOUT = 100  # timeout for connecting/disconnecting
@@ -152,7 +151,7 @@ class IPCServer(QObject):
         got_invalid_data: Emitted when there was invalid incoming data.
     """
 
-    got_args = pyqtSignal(list, str)
+    got_args = pyqtSignal(list, str, str)
     got_raw = pyqtSignal(bytes)
     got_invalid_data = pyqtSignal()
 
@@ -183,7 +182,7 @@ class IPCServer(QObject):
         self._server.newConnection.connect(self.handle_connection)
 
         self._socket = None
-        self._socketopts_ok = os.name == 'nt' or qtutils.version_check('5.4')
+        self._socketopts_ok = os.name == 'nt'
         if self._socketopts_ok:  # pragma: no cover
             # If we use setSocketOptions on Unix with Qt < 5.4, we get a
             # NameError while listening...
@@ -213,7 +212,13 @@ class IPCServer(QObject):
                 raise ListenError(self._server)
         if not self._socketopts_ok:  # pragma: no cover
             # If we use setSocketOptions on Unix with Qt < 5.4, we get a
-            # NameError while listening...
+            # NameError while listening.
+            # (see b135569d5c6e68c735ea83f42e4baf51f7972281)
+            #
+            # Also, we don't get an AddressInUseError with Qt 5.5:
+            # https://bugreports.qt.io/browse/QTBUG-48635
+            #
+            # This means we only use setSocketOption on Windows...
             os.chmod(self._server.fullServerName(), 0o700)
 
     @pyqtSlot(int)
@@ -314,12 +319,12 @@ class IPCServer(QObject):
                 self._handle_invalid_data()
                 return
 
-            try:
-                args = json_data['args']
-            except KeyError:
-                log.ipc.error("no args: {}".format(decoded.strip()))
-                self._handle_invalid_data()
-                return
+            for name in ('args', 'target_arg'):
+                if name not in json_data:
+                    log.ipc.error("Missing {}: {}".format(name,
+                                                          decoded.strip()))
+                    self._handle_invalid_data()
+                    return
 
             try:
                 protocol_version = int(json_data['protocol_version'])
@@ -336,7 +341,7 @@ class IPCServer(QObject):
                 return
 
             cwd = json_data.get('cwd', None)
-            self.got_args.emit(args, cwd)
+            self.got_args.emit(json_data['args'], json_data['target_arg'], cwd)
 
     @pyqtSlot()
     def on_timeout(self):
@@ -418,8 +423,8 @@ def _has_legacy_server(name):
     return False
 
 
-def send_to_running_instance(socketname, command, *, legacy_name=None,
-                             socket=None):
+def send_to_running_instance(socketname, command, target_arg, *,
+                             legacy_name=None, socket=None):
     """Try to send a commandline to a running instance.
 
     Blocks for CONNECT_TIMEOUT ms.
@@ -427,6 +432,7 @@ def send_to_running_instance(socketname, command, *, legacy_name=None,
     Args:
         socketname: The name which should be used for the socket.
         command: The command to send to the running instance.
+        target_arg: --target command line argument
         socket: The socket to read data from, or None.
         legacy_name: The legacy name to first try to connect to.
 
@@ -448,7 +454,8 @@ def send_to_running_instance(socketname, command, *, legacy_name=None,
     connected = socket.waitForConnected(CONNECT_TIMEOUT)
     if connected:
         log.ipc.info("Opening in existing instance")
-        json_data = {'args': command, 'version': qutebrowser.__version__,
+        json_data = {'args': command, 'target_arg': target_arg,
+                     'version': qutebrowser.__version__,
                      'protocol_version': PROTOCOL_VERSION}
         try:
             cwd = os.getcwd()
@@ -500,6 +507,7 @@ def send_or_listen(args):
     try:
         try:
             sent = send_to_running_instance(socketname, args.command,
+                                            args.target,
                                             legacy_name=legacy_socketname)
             if sent:
                 return None
@@ -513,6 +521,7 @@ def send_or_listen(args):
             log.init.debug("Got AddressInUseError, trying again.")
             time.sleep(0.5)
             sent = send_to_running_instance(socketname, args.command,
+                                            args.target,
                                             legacy_name=legacy_socketname)
             if sent:
                 return None

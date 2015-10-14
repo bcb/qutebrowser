@@ -149,8 +149,8 @@ Contributors, sorted by the number of commits in descending order:
 * Thorsten Wißmann
 * Alexey "Averrin" Nabrodov
 * ZDarian
-* Peter Vilim
 * John ShaggyTwoDope Jenkins
+* Peter Vilim
 * Jimmy
 * Zach-Button
 * rikn00
@@ -162,6 +162,8 @@ Contributors, sorted by the number of commits in descending order:
 * neeasade
 * jnphilipp
 * Tobias Patzl
+* Peter Michely
+* Jonas Schürmann
 * Johannes Altmanninger
 * Samir Benmendil
 * Regina Hug

@@ -38,6 +38,12 @@ try:
 except ImportError:
     winreg = None
 
+TESTENV = os.environ['TESTENV']
+TRAVIS_OS = os.environ.get('TRAVIS_OS_NAME', None)
+INSTALL_PYQT = TESTENV in ('py34', 'py35', 'unittests-nodisp', 'vulture',
+                           'pylint')
+XVFB = TRAVIS_OS == 'linux' and TESTENV == 'py34'
+
 
 def apt_get(args):
     subprocess.check_call(['sudo', 'apt-get', '-y', '-q'] + args)
@@ -52,9 +58,10 @@ def brew(args, silent=False):
 
 
 def check_setup(executable):
-    print("Checking setup...")
-    subprocess.check_call([executable, '-c', 'import PyQt5'])
-    subprocess.check_call([executable, '-c', 'import sip'])
+    if INSTALL_PYQT:
+        print("Checking setup...")
+        subprocess.check_call([executable, '-c', 'import PyQt5'])
+        subprocess.check_call([executable, '-c', 'import sip'])
 
 
 if 'APPVEYOR' in os.environ:
@@ -80,35 +87,44 @@ if 'APPVEYOR' in os.environ:
         f.write(r'@C:\Python34\python %*')
 
     check_setup(r'C:\Python34\python')
-elif os.environ.get('TRAVIS_OS_NAME', None) == 'linux':
-    print("apt-get update...")
-    apt_get(['update'])
+elif TRAVIS_OS == 'linux':
+    print("sudo pip install tox/npm")
+    subprocess.check_call(['sudo', 'pip', 'install', 'tox'])
 
     print("Installing packages...")
-    pkgs = ['python3-pyqt5', 'python3-pyqt5.qtwebkit', 'python-tox',
-            'python3-dev', 'libpython3.4-dev', 'xvfb']
-    apt_get(['install'] + pkgs)
-    check_setup('python3')
-elif os.environ.get('TRAVIS_OS_NAME', None) == 'osx':
+    pkgs = []
+
+    if XVFB:
+        pkgs.append('xvfb')
+    if INSTALL_PYQT:
+        pkgs += ['python3-pyqt5', 'python3-pyqt5.qtwebkit']
+    if TESTENV == 'eslint':
+        pkgs += ['npm', 'nodejs', 'nodejs-legacy']
+
+    if pkgs:
+        print("apt-get update...")
+        apt_get(['update'])
+        print("apt-get install...")
+        apt_get(['install'] + pkgs)
+
+    if TESTENV == 'eslint':
+        subprocess.check_call(['sudo', 'npm', 'install', '-g', 'eslint'])
+    else:
+        check_setup('python3')
+elif TRAVIS_OS == 'osx':
     print("brew update...")
     brew(['update'], silent=True)
 
     print("Installing packages...")
-    brew(['install', 'python3', 'pyqt5'])
+    pkgs = ['python3']
+    if INSTALL_PYQT:
+        pkgs.append('pyqt5')
+    brew(['install'] + pkgs)
 
     print("Installing tox...")
     subprocess.check_call(['sudo', 'pip3', 'install', 'tox'])
 
     check_setup('python3')
-
-    print("Creating xvfb-run stub...")
-    with open('/usr/local/bin/xvfb-run', 'w') as f:
-        # This will break when xvfb-run is called differently in .travis.yml,
-        # but I can't be bothered to do it in a nicer way.
-        f.write('#!/bin/bash\n')
-        f.write('shift 2\n')
-        f.write('exec "$@"\n')
-    subprocess.check_call(['sudo', 'chmod', '755', '/usr/local/bin/xvfb-run'])
 else:
     def env(key):
         return os.environ.get(key, None)
