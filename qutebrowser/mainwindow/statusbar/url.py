@@ -28,8 +28,8 @@ from qutebrowser.utils import usertypes
 
 
 # Note this has entries for success/error/warn from widgets.webview:LoadStatus
-UrlType = usertypes.enum('UrlType', ['success', 'error', 'warn', 'hover',
-                                     'normal'])
+UrlType = usertypes.enum('UrlType', ['success', 'success_https', 'error',
+                                     'warn', 'hover', 'normal'])
 
 
 class UrlText(textbase.TextBase):
@@ -54,23 +54,27 @@ class UrlText(textbase.TextBase):
 
     STYLESHEET = """
         QLabel#UrlText[urltype="normal"] {
-            {{ color['statusbar.url.fg'] }}
+            color: {{ color['statusbar.url.fg'] }};
         }
 
         QLabel#UrlText[urltype="success"] {
-            {{ color['statusbar.url.fg.success'] }}
+            color: {{ color['statusbar.url.fg.success'] }};
+        }
+
+        QLabel#UrlText[urltype="success_https"] {
+            color: {{ color['statusbar.url.fg.success.https'] }};
         }
 
         QLabel#UrlText[urltype="error"] {
-            {{ color['statusbar.url.fg.error'] }}
+            color: {{ color['statusbar.url.fg.error'] }};
         }
 
         QLabel#UrlText[urltype="warn"] {
-            {{ color['statusbar.url.fg.warn'] }}
+            color: {{ color['statusbar.url.fg.warn'] }};
         }
 
         QLabel#UrlText[urltype="hover"] {
-            {{ color['statusbar.url.fg.hover'] }}
+            color: {{ color['statusbar.url.fg.hover'] }};
         }
     """
 
@@ -116,7 +120,9 @@ class UrlText(textbase.TextBase):
             status_str: The LoadStatus as string.
         """
         status = webview.LoadStatus[status_str]
-        if status in (webview.LoadStatus.success, webview.LoadStatus.error,
+        if status in (webview.LoadStatus.success,
+                      webview.LoadStatus.success_https,
+                      webview.LoadStatus.error,
                       webview.LoadStatus.warn):
             self._normal_url_type = UrlType[status_str]
         else:
