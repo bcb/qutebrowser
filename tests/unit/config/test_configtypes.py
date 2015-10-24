@@ -844,6 +844,8 @@ class TestColorSystem:
         'hsv': QColor.Hsv,
         'HSL': QColor.Hsl,
         'hsl': QColor.Hsl,
+        'none': None,
+        'None': None,
         '': None,
     }
     INVALID = ['RRGB', 'HSV ', '']  # '' is invalid with none_ok=False
@@ -2040,6 +2042,24 @@ class TestUserAgent:
     def test_complete(self, klass):
         """Simple smoke test for completion."""
         klass().complete()
+
+
+class TestTimestampTemplate:
+
+    """Test TimestampTemplate."""
+
+    @pytest.fixture
+    def klass(self):
+        return configtypes.TimestampTemplate
+
+    @pytest.mark.parametrize('val', ['', 'foobar', '%H:%M', 'foo %H bar %M'])
+    def test_validate_valid(self, klass, val):
+        klass(none_ok=True).validate(val)
+
+    @pytest.mark.parametrize('val', ['', '%'])
+    def test_validate_invalid(self, klass, val):
+        with pytest.raises(configexc.ValidationError):
+            klass().validate(val)
 
 
 @pytest.mark.parametrize('first, second, equal', [

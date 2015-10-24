@@ -381,7 +381,7 @@ def data(readonly=False):
              "What to display in the download filename input."),
 
             ('timestamp-format',
-             SettingValue(typ.String(none_ok=True), '%Y-%m-%d'),
+             SettingValue(typ.TimestampTemplate(none_ok=True), '%Y-%m-%d'),
              "How to format timestamps (e.g. for history)"),
 
             ('show',
@@ -413,6 +413,14 @@ def data(readonly=False):
              SettingValue(typ.Bool(), 'false'),
              "Whether to shrink the completion to be smaller than the "
              "configured size if there are no scrollbars."),
+
+            ('scrollbar-width',
+             SettingValue(typ.Int(minval=0), '12'),
+             "Width of the scrollbar in the completion window (in px)."),
+
+            ('scrollbar-padding',
+             SettingValue(typ.Int(minval=0), '2'),
+             "Padding of scrollbar handle in completion window (in px)."),
 
             readonly=readonly
         )),
@@ -871,6 +879,14 @@ def data(readonly=False):
             ('completion.match.fg',
              SettingValue(typ.QssColor(), '#ff4444'),
              "Foreground color of the matched text in the completion."),
+
+            ('completion.scrollbar.fg',
+             SettingValue(typ.QssColor(), '${completion.fg}'),
+             "Color of the scrollbar handle in completion view."),
+
+            ('completion.scrollbar.bg',
+             SettingValue(typ.QssColor(), '${completion.bg}'),
+             "Color of the scrollbar in completion view"),
 
             ('statusbar.fg',
              SettingValue(typ.QssColor(), 'white'),
