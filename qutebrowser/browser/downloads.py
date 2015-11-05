@@ -771,7 +771,7 @@ class DownloadManager(QAbstractListModel):
             fileobj: The file object to write the answer to.
             filename: A path to write the data to.
             auto_remove: Whether to remove the download even if
-                         ui -> remove-finished-downloads is set to false.
+                         ui -> remove-finished-downloads is set to -1.
 
         Return:
             The created DownloadItem.
@@ -790,9 +790,10 @@ class DownloadManager(QAbstractListModel):
         download = DownloadItem(reply, self._win_id, self)
         download.cancelled.connect(
             functools.partial(self.remove_item, download))
-        if config.get('ui', 'remove-finished-downloads') or auto_remove:
+        delay = config.get('ui', 'remove-finished-downloads')
+        if delay > -1 or auto_remove:
             download.finished.connect(
-                functools.partial(self.remove_item, download))
+                functools.partial(self.remove_item_delayed, download, delay))
         download.data_changed.connect(
             functools.partial(self.on_data_changed, download))
         download.error.connect(self.on_error)
@@ -963,18 +964,25 @@ class DownloadManager(QAbstractListModel):
         """Check if there are finished downloads to clear."""
         return any(download.done for download in self.downloads)
 
+    @cmdutils.register(instance='download-manager', scope='window')
+    def download_clear(self):
+        """Remove all finished downloads from the list."""
+        finished_items = [d for d in self.downloads if d.done]
+        self.remove_items(finished_items)
+
     @cmdutils.register(instance='download-manager', scope='window',
                        count='count')
     def download_remove(self, all_=False, count=0):
         """Remove the last/[count]th download from the list.
 
         Args:
-            all_: If given removes all finished downloads.
+            all_: Deprecated argument for removing all finished downloads.
             count: The index of the download to cancel.
         """
         if all_:
-            finished_items = [d for d in self.downloads if d.done]
-            self.remove_items(finished_items)
+            message.warning(self._win_id, ":download-remove --all is "
+                            "deprecated - use :download-clear instead!")
+            self.download_clear()
         else:
             try:
                 download = self.downloads[count - 1]
@@ -1010,6 +1018,10 @@ class DownloadManager(QAbstractListModel):
         self.update_indexes()
         if not self.downloads:
             self._update_timer.stop()
+
+    def remove_item_delayed(self, download, delay):
+        """Remove a given download after a short delay."""
+        QTimer.singleShot(delay, functools.partial(self.remove_item, download))
 
     def remove_items(self, downloads):
         """Remove an iterable of downloads."""

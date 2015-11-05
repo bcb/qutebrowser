@@ -17,23 +17,30 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Test which simply runs qutebrowser to check if it starts properly."""
+import pytest_bdd as bdd
+bdd.scenarios('scroll.feature')
 
 
-import sys
-import os.path
-import subprocess
+def _get_scroll_values(quteproc):
+    data = quteproc.get_session()
+    pos = data['windows'][0]['tabs'][0]['history'][0]['scroll-pos']
+    return (pos['x'], pos['y'])
 
 
-def test_smoke():
-    if hasattr(sys, 'frozen'):
-        argv = [os.path.join(os.path.dirname(sys.executable), 'qutebrowser')]
+@bdd.then(bdd.parsers.re(r"the page should be scrolled "
+                         r"(?P<direction>horizontally|vertically)"))
+def check_scrolled(quteproc, direction):
+    x, y = _get_scroll_values(quteproc)
+    if direction == 'horizontally':
+        assert x != 0
+        assert y == 0
     else:
-        argv = [sys.executable, '-m', 'qutebrowser']
-    argv += ['--debug', '--no-err-windows', '--nowindow', '--temp-basedir',
-             'about:blank', ':later 500 quit']
-    subprocess.check_call(argv)
+        assert x == 0
+        assert y != 0
 
 
-def test_smoke_quteproc(quteproc):
-    pass
+@bdd.then("the page should not be scrolled.")
+def check_not_scrolled(quteproc):
+    x, y = _get_scroll_values(quteproc)
+    assert x == 0
+    assert y == 0

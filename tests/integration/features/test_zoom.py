@@ -17,23 +17,5 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Test which simply runs qutebrowser to check if it starts properly."""
-
-
-import sys
-import os.path
-import subprocess
-
-
-def test_smoke():
-    if hasattr(sys, 'frozen'):
-        argv = [os.path.join(os.path.dirname(sys.executable), 'qutebrowser')]
-    else:
-        argv = [sys.executable, '-m', 'qutebrowser']
-    argv += ['--debug', '--no-err-windows', '--nowindow', '--temp-basedir',
-             'about:blank', ':later 500 quit']
-    subprocess.check_call(argv)
-
-
-def test_smoke_quteproc(quteproc):
-    pass
+import pytest_bdd as bdd
+bdd.scenarios('zoom.feature')

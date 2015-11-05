@@ -140,7 +140,7 @@ def data(readonly=False):
              "end."),
 
             ('startpage',
-             SettingValue(typ.List(), 'https://www.duckduckgo.com'),
+             SettingValue(typ.List(), 'https://duckduckgo.com'),
              "The default page(s) to open at the start, separated by commas."),
 
             ('default-page',
@@ -291,8 +291,9 @@ def data(readonly=False):
              "Whether to enable smooth scrolling for webpages."),
 
             ('remove-finished-downloads',
-             SettingValue(typ.Bool(), 'false'),
-             "Whether to remove finished downloads automatically."),
+             SettingValue(typ.Int(minval=-1), '-1'),
+             "Number of milliseconds to wait before removing finished "
+             "downloads. Will not be removed if value is -1."),
 
             ('hide-statusbar',
              SettingValue(typ.Bool(), 'false'),
@@ -781,7 +782,11 @@ def data(readonly=False):
              "Mode to use for hints."),
 
             ('chars',
-             SettingValue(typ.String(minlen=2), 'asdfghjkl'),
+             SettingValue(typ.String(minlen=2, completions=[
+                 ('asdfghjkl', "Home row"),
+                 ('dhtnaoeu', "Home row (Dvorak)"),
+                 ('abcdefghijklmnopqrstuvwxyz', "All letters"),
+             ]), 'asdfghjkl'),
              "Chars used for hint strings."),
 
             ('min-chars',
@@ -1368,7 +1373,7 @@ KEY_DATA = collections.OrderedDict([
         ('inspector', ['wi']),
         ('download', ['gd']),
         ('download-cancel', ['ad']),
-        ('download-remove --all', ['cd']),
+        ('download-clear', ['cd']),
         ('view-source', ['gf']),
         ('tab-focus last', ['<Ctrl-Tab>']),
         ('enter-mode passthrough', ['<Ctrl-V>']),
@@ -1492,4 +1497,6 @@ CHANGED_KEY_COMMANDS = [
 
     (re.compile(r'^search *;; *clear-keychain$'), r'clear-keychain ;; search'),
     (re.compile(r'^leave-mode$'), r'clear-keychain ;; leave-mode'),
+
+    (re.compile(r'^download-remove --all$'), r'download-clear'),
 ]

@@ -17,23 +17,32 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Test which simply runs qutebrowser to check if it starts properly."""
+
+import pytest
+
+from helpers import utils  # pylint: disable=import-error
 
 
-import sys
-import os.path
-import subprocess
+@pytest.mark.parametrize('val1, val2', [
+    ({'a': 1}, {'a': 1}),
+    ({'a': 1, 'b': 2}, {'a': 1}),
+    ({'a': [1, 2, 3]}, {'a': [1]}),
+    ({'a': [1, 2, 3]}, {'a': [..., 2]}),
+    (1.0, 1.00000001),
+])
+def test_partial_compare_equal(val1, val2):
+    assert utils.partial_compare(val1, val2)
 
 
-def test_smoke():
-    if hasattr(sys, 'frozen'):
-        argv = [os.path.join(os.path.dirname(sys.executable), 'qutebrowser')]
-    else:
-        argv = [sys.executable, '-m', 'qutebrowser']
-    argv += ['--debug', '--no-err-windows', '--nowindow', '--temp-basedir',
-             'about:blank', ':later 500 quit']
-    subprocess.check_call(argv)
-
-
-def test_smoke_quteproc(quteproc):
-    pass
+@pytest.mark.parametrize('val1, val2', [
+    ({'a': 1}, {'a': 2}),
+    ({'a': 1}, {'b': 1}),
+    ({'a': 1, 'b': 2}, {'a': 2}),
+    ({'a': [1]}, {'a': [1, 2, 3]}),
+    ({'a': [1]}, {'a': [2, 3, 4]}),
+    ([1], {1: 2}),
+    ({1: 1}, {1: [1]}),
+    ({'a': [1, 2, 3]}, {'a': [..., 3]}),
+])
+def test_partial_compare_not_equal(val1, val2):
+    assert not utils.partial_compare(val1, val2)

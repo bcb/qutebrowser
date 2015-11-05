@@ -118,6 +118,16 @@ def pytest_collection_modifyitems(items):
         _apply_platform_markers(item)
 
 
+def pytest_ignore_collect(path):
+    """Ignore BDD tests during collection if frozen."""
+    rel_path = path.relto(os.path.dirname(__file__))
+    if (rel_path == os.path.join('integration', 'features') and
+            hasattr(sys, 'frozen')):
+        return True
+    else:
+        return False
+
+
 @pytest.fixture(scope='session')
 def qapp(qapp):
     """Change the name of the QApplication instance."""
@@ -335,6 +345,10 @@ def py_proc():
 @pytest.yield_fixture(autouse=True)
 def fail_tests_on_warnings():
     warnings.simplefilter('error')
+    # https://github.com/pytest-dev/pytest-bdd/issues/153
+    warnings.filterwarnings('ignore', message=r'inspect.getargspec\(\) is '
+                            r'deprecated, use inspect.signature\(\) instead',
+                            category=DeprecationWarning)
     yield
     warnings.resetwarnings()
 

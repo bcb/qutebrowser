@@ -17,23 +17,33 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Test which simply runs qutebrowser to check if it starts properly."""
+import pytest
+
+from PyQt5.QtGui import QClipboard
+
+import pytest_bdd as bdd
 
 
-import sys
-import os.path
-import subprocess
+bdd.scenarios('yankpaste.feature')
 
 
-def test_smoke():
-    if hasattr(sys, 'frozen'):
-        argv = [os.path.join(os.path.dirname(sys.executable), 'qutebrowser')]
+@bdd.when("selection is supported")
+def selection_supported(qapp):
+    if not qapp.clipboard().supportsSelection():
+        pytest.skip("OS doesn't support primary selection!")
+
+
+@bdd.then(bdd.parsers.re(r'the (?P<what>primary selection|clipboard) should '
+                         r'contain "(?P<content>.*)"'))
+def clipboard_contains(qapp, httpbin, what, content):
+    if what == 'clipboard':
+        mode = QClipboard.Clipboard
+    elif what == 'primary selection':
+        mode = QClipboard.Selection
     else:
-        argv = [sys.executable, '-m', 'qutebrowser']
-    argv += ['--debug', '--no-err-windows', '--nowindow', '--temp-basedir',
-             'about:blank', ':later 500 quit']
-    subprocess.check_call(argv)
+        raise AssertionError
 
+    expected = content.replace('(port)', str(httpbin.port))
 
-def test_smoke_quteproc(quteproc):
-    pass
+    data = qapp.clipboard().text(mode=mode)
+    assert data == expected

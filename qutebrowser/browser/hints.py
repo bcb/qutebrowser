@@ -864,7 +864,7 @@ class HintManager(QObject):
         for elems in self._context.elems.values():
             try:
                 if (filterstr is None or
-                        filterstr.lower() in str(elems.elem).lower()):
+                        filterstr.casefold() in str(elems.elem).casefold()):
                     if self._is_hidden(elems.label):
                         # hidden element which matches again -> show it
                         self._show_elem(elems.label)
