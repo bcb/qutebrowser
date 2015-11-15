@@ -946,12 +946,22 @@ class HintManager(QObject):
                 elems.label.setInnerXml(string)
         handler()
 
-    @cmdutils.register(instance='hintmanager', scope='tab', hide=True)
-    def follow_hint(self):
-        """Follow the currently selected hint."""
-        if not self._context.to_follow:
-            raise cmdexc.CommandError("No hint to follow")
-        self.fire(self._context.to_follow, force=True)
+    @cmdutils.register(instance='hintmanager', scope='tab', hide=True,
+                       modes=[usertypes.KeyMode.hint])
+    def follow_hint(self, keystring=None):
+        """Follow a hint.
+
+        Args:
+            keystring: The hint to follow, or None.
+        """
+        if keystring is None:
+            if self._context.to_follow is None:
+                raise cmdexc.CommandError("No hint to follow")
+            else:
+                keystring = self._context.to_follow
+        elif keystring not in self._context.elems:
+            raise cmdexc.CommandError("No hint {}!".format(keystring))
+        self.fire(keystring, force=True)
 
     @pyqtSlot('QSize')
     def on_contents_size_changed(self, _size):

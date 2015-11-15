@@ -17,9 +17,5 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-# pylint: disable=unused-import
-
-"""Things needed for integration testing."""
-
-from webserver import httpbin, httpbin_after_test
-from quteprocess import quteproc, quteproc_after_test
+import pytest_bdd as bdd
+bdd.scenarios('hints.feature')

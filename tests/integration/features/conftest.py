@@ -43,13 +43,26 @@ def open_path_when(quteproc, path):
     quteproc.open_path(path)
 
 
+@bdd.when(bdd.parsers.parse("I set {sect} -> {opt} to {value}"))
+def set_setting_when(quteproc, sect, opt, value):
+    quteproc.set_setting(sect, opt, value)
+
+
 @bdd.given(bdd.parsers.parse("I run {command}"))
 def run_command_given(quteproc, command):
     quteproc.send_cmd(command)
 
 
+@bdd.given("I have a fresh instance")
+def fresh_instance(quteproc):
+    """Restart qutebrowser instance for tests needing a fresh state."""
+    quteproc.terminate()
+    quteproc.start()
+
+
 @bdd.when(bdd.parsers.parse("I run {command}"))
-def run_command_when(quteproc, command):
+def run_command_when(quteproc, httpbin, command):
+    command = command.replace('(port)', str(httpbin.port))
     quteproc.send_cmd(command)
 
 
@@ -57,6 +70,25 @@ def run_command_when(quteproc, command):
 def reload(qtbot, httpbin, quteproc, command):
     with qtbot.waitSignal(httpbin.new_request, raising=True):
         quteproc.send_cmd(':reload')
+
+
+@bdd.when(bdd.parsers.parse("I wait until {path} is loaded"))
+def wait_until_loaded(quteproc, path):
+    quteproc.wait_for_load_finished(path)
+
+
+@bdd.when(bdd.parsers.re(r'I wait for (?P<is_regex>regex )?"'
+                         r'(?P<pattern>[^"]+)" in the log'))
+def wait_in_log(quteproc, is_regex, pattern):
+    if is_regex:
+        pattern = re.compile(pattern)
+    quteproc.wait_for(message=pattern)
+
+
+@bdd.when(bdd.parsers.re(r'I wait for the (?P<category>error|message|warning) '
+                         r'"(?P<message>.*)"'))
+def wait_for_message(quteproc, httpbin, category, message):
+    expect_error(quteproc, httpbin, category, message)
 
 
 @bdd.then(bdd.parsers.parse("{path} should be loaded"))
@@ -67,9 +99,10 @@ def path_should_be_loaded(httpbin, path):
 
 @bdd.then(bdd.parsers.parse("The requests should be:\n{pages}"))
 def list_of_loaded_pages(httpbin, pages):
-    requests = [httpbin.Request('GET', '/' + path.strip())
-                for path in pages.split('\n')]
-    assert httpbin.get_requests() == requests
+    expected_requests = [httpbin.Request('GET', '/' + path.strip())
+                         for path in pages.split('\n')]
+    actual_requests = httpbin.get_requests()
+    assert actual_requests == expected_requests
 
 
 @bdd.then(bdd.parsers.re(r'the (?P<category>error|message|warning) '
@@ -96,3 +129,11 @@ def compare_session(quteproc, expected):
     data = quteproc.get_session()
     expected = loader.get_data()
     assert utils.partial_compare(data, expected)
+
+
+@bdd.then("no crash should happen")
+def no_crash():
+    """Don't do anything.
+
+    This is actually a NOP as a crash is already checked in the log."""
+    pass

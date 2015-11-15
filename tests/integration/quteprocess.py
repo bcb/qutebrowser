@@ -24,7 +24,6 @@
 
 import re
 import sys
-import time
 import os.path
 import datetime
 import logging
@@ -55,14 +54,13 @@ class NoLineMatch(Exception):
     pass
 
 
-class LogLine:
+class LogLine(testprocess.Line):
 
     """A parsed line from the qutebrowser log output.
 
     Attributes:
         timestamp/loglevel/category/module/function/line/message:
             Parsed from the log output.
-        _line: The entire unparsed line.
         expected: Whether the message was expected or not.
     """
 
@@ -70,16 +68,17 @@ class LogLine:
         (?P<timestamp>\d\d:\d\d:\d\d)
         \ (?P<loglevel>VDEBUG|DEBUG|INFO|WARNING|ERROR)
         \ +(?P<category>\w+)
-        \ +(?P<module>(\w+|Unknown\ module)):(?P<function>\w+):(?P<line>\d+)
+        \ +(?P<module>(\w+|Unknown\ module)):
+           (?P<function>[^"][^:]*|"[^"]+"):
+           (?P<line>\d+)
         \ (?P<message>.+)
     """, re.VERBOSE)
 
-    def __init__(self, line):
-        self._line = line
-        match = self.LOG_RE.match(line)
+    def __init__(self, data):
+        super().__init__(data)
+        match = self.LOG_RE.match(data)
         if match is None:
-            raise NoLineMatch(line)
-        self.__dict__.update(match.groupdict())
+            raise NoLineMatch(data)
 
         self.timestamp = datetime.datetime.strptime(match.group('timestamp'),
                                                     '%H:%M:%S')
@@ -97,14 +96,24 @@ class LogLine:
         else:
             self.module = module
 
-        self.function = match.group('function')
-        self.line = int(match.group('line'))
-        self.message = match.group('message')
+        function = match.group('function')
+        if function == 'none':
+            self.function = None
+        else:
+            self.function = function.strip('"')
+
+        line = int(match.group('line'))
+        if self.function is None and line == 0:
+            self.line = None
+        else:
+            self.line = line
+
+        msg_match = re.match(r'^(\[(?P<prefix>\d+s ago)\] )?(?P<message>.*)',
+                             match.group('message'))
+        self.prefix = msg_match.group('prefix')
+        self.message = msg_match.group('message')
 
         self.expected = is_ignored_qt_message(self.message)
-
-    def __repr__(self):
-        return 'LogLine({!r})'.format(self._line)
 
 
 class QuteProc(testprocess.Process):
@@ -168,6 +177,12 @@ class QuteProc(testprocess.Process):
                  'about:blank']
         return executable, args
 
+    def _path_to_url(self, path):
+        if path.startswith('about:') or path.startswith('qute:'):
+            return path
+        else:
+            return 'http://localhost:{}/{}'.format(self._httpbin.port, path)
+
     def after_test(self):
         bad_msgs = [msg for msg in self._data
                     if msg.loglevel > logging.INFO and not msg.expected]
@@ -183,46 +198,43 @@ class QuteProc(testprocess.Process):
         ipc.send_to_running_instance(self._ipc_socket, [command],
                                      target_arg='')
         self.wait_for(category='commands', module='command', function='run',
-                      message='Calling *')
-        # Wait a bit in cause the command triggers any error.
-        time.sleep(0.5)
+                      message='command called: *')
 
     def set_setting(self, sect, opt, value):
         self.send_cmd(':set "{}" "{}" "{}"'.format(sect, opt, value))
         self.wait_for(category='config', message='Config option changed: *')
 
     def open_path(self, path, new_tab=False):
-        url_loaded_pattern = re.compile(
-            r"load status for <qutebrowser.browser.webview.WebView tab_id=\d+ "
-            r"url='[^']+'>: LoadStatus.success")
-
-        url = 'http://localhost:{}/{}'.format(self._httpbin.port, path)
+        url = self._path_to_url(path)
         if new_tab:
             self.send_cmd(':open -t ' + url)
         else:
             self.send_cmd(':open ' + url)
-        self.wait_for(category='webview', message=url_loaded_pattern)
+        self.wait_for_load_finished(path)
 
     def mark_expected(self, category=None, loglevel=None, message=None):
         """Mark a given logging message as expected."""
-        found_message = False
+        line = self.wait_for(category=category, loglevel=loglevel,
+                             message=message)
+        line.expected = True
 
-        # Search existing messages
-        for item in self._data:
-            if category is not None and item.category != category:
-                continue
-            elif loglevel is not None and item.loglevel != loglevel:
-                continue
-            elif message is not None and item.message != message:
-                continue
-            item.expected = True
-            found_message = True
+    def wait_for(self, timeout=None, **kwargs):
+        """Override testprocess.wait_for to check past messages.
 
-        # If there is none, wait for the message
-        if not found_message:
-            line = self.wait_for(category=category, loglevel=loglevel,
-                                 message=message)
-            line.expected = True
+        self._data is cleared after every test to provide at least some
+        isolation.
+        """
+        __tracebackhide__ = True
+        return super().wait_for(timeout, **kwargs)
+
+    def wait_for_load_finished(self, path, timeout=15000):
+        """Wait until any tab has finished loading."""
+        url = self._path_to_url(path)
+        pattern = re.compile(
+            r"(load status for <qutebrowser.browser.webview.WebView "
+            r"tab_id=\d+ url='{url}'>: LoadStatus.success|fetch: "
+            r"PyQt5.QtCore.QUrl\('{url}'\) -> .*)".format(url=re.escape(url)))
+        self.wait_for(message=pattern, timeout=timeout)
 
     def get_session(self):
         """Save the session and get the parsed session data."""
@@ -248,7 +260,8 @@ def quteproc(qapp, httpbin):
 
 
 @pytest.yield_fixture(autouse=True)
-def httpbin_after_test(quteproc):
+def quteproc_after_test(quteproc):
     """Fixture to run cleanup tasks after each test."""
+    quteproc.before_test()
     yield
     quteproc.after_test()

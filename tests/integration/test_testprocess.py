@@ -20,6 +20,7 @@
 """Test testprocess.Process."""
 
 import sys
+import time
 import contextlib
 import datetime
 
@@ -46,15 +47,6 @@ def stopwatch(min_ms=None, max_ms=None):
         assert delta_ms <= max_ms
 
 
-class Line:
-
-    def __init__(self, data):
-        self.data = data
-
-    def __repr__(self):
-        return 'Line({!r})'.format(self.data)
-
-
 class PythonProcess(testprocess.Process):
 
     """A testprocess which runs the given Python code."""
@@ -68,7 +60,7 @@ class PythonProcess(testprocess.Process):
         print("LINE: {}".format(line))
         if line.strip() == 'ready':
             self.ready.emit()
-        return Line(line)
+        return testprocess.Line(line)
 
     def _executable_args(self):
         code = [
@@ -92,14 +84,14 @@ class TestWaitFor:
 
     def test_successful(self, pyproc):
         """Using wait_for with the expected text."""
-        pyproc.code = "import time; time.sleep(0.5); print('foobar')"
-        pyproc.start()
-        with stopwatch(min_ms=300):  # on Windows, this can be done faster...
+        pyproc.code = "time.sleep(0.5); print('foobar')"
+        with stopwatch(min_ms=500):
+            pyproc.start()
             pyproc.wait_for(data="foobar")
 
     def test_other_text(self, pyproc):
         """Test wait_for when getting some unrelated text."""
-        pyproc.code = "import time; time.sleep(0.1); print('blahblah')"
+        pyproc.code = "time.sleep(0.1); print('blahblah')"
         pyproc.start()
         with pytest.raises(testprocess.WaitForTimeout):
             pyproc.wait_for(data="foobar", timeout=500)
@@ -108,5 +100,37 @@ class TestWaitFor:
         """Test wait_for when getting no text at all."""
         pyproc.code = "pass"
         pyproc.start()
+        with pytest.raises(testprocess.WaitForTimeout):
+            pyproc.wait_for(data="foobar", timeout=100)
+
+    @pytest.mark.parametrize('message', ['foobar', 'literal [x]'])
+    def test_existing_message(self, message, pyproc):
+        """Test with a message which already passed when waiting."""
+        pyproc.code = "print('{}')".format(message)
+        pyproc.start()
+        time.sleep(0.5)  # to make sure the message is printed
+        pyproc.wait_for(data=message)
+
+    def test_existing_message_previous_test(self, pyproc):
+        """Make sure the message of a previous test gets ignored."""
+        pyproc.code = "print('foobar')"
+        pyproc.start()
+        line = pyproc.wait_for(data="foobar")
+        line.waited_for = False  # so we don't test what the next test does
+        pyproc.after_test()
+        with pytest.raises(testprocess.WaitForTimeout):
+            pyproc.wait_for(data="foobar", timeout=100)
+
+    def test_existing_message_already_waited(self, pyproc):
+        """Make sure an existing message doesn't stop waiting twice.
+
+        wait_for checks existing messages (see above), but we don't want it to
+        automatically proceed if we already *did* use wait_for on one of the
+        existing messages, as that makes it likely it's not what we actually
+        want.
+        """
+        pyproc.code = "time.sleep(0.1); print('foobar')"
+        pyproc.start()
+        pyproc.wait_for(data="foobar")
         with pytest.raises(testprocess.WaitForTimeout):
             pyproc.wait_for(data="foobar", timeout=100)

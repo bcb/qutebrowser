@@ -20,11 +20,14 @@
 """Base class for a subprocess run for tests.."""
 
 import re
-import fnmatch
+import os
+import time
 
 import pytestqt.plugin  # pylint: disable=import-error
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QProcess, QObject, QElapsedTimer
 from PyQt5.QtTest import QSignalSpy
+
+from helpers import utils  # pylint: disable=import-error
 
 
 class InvalidLine(Exception):
@@ -46,6 +49,23 @@ class WaitForTimeout(Exception):
     """Raised when wait_for didn't get the expected message."""
 
 
+class Line:
+
+    """Container for a line of data the process emits.
+
+    Attributes:
+        data: The raw data passed to the constructor.
+        waited_for: If Process.wait_for was used on this line already.
+    """
+
+    def __init__(self, data):
+        self.data = data
+        self.waited_for = False
+
+    def __repr__(self):
+        return '{}({!r})'.format(self.__class__.__name__, self.data)
+
+
 class Process(QObject):
 
     """Abstraction over a running test subprocess process.
@@ -62,7 +82,7 @@ class Process(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._invalid = False
+        self._invalid = []
         self._data = []
         self.proc = QProcess()
         self.proc.setReadChannel(QProcess.StandardError)
@@ -114,11 +134,14 @@ class Process(QObject):
             try:
                 parsed = self._parse_line(line)
             except InvalidLine:
-                self._invalid = True
+                self._invalid.append(line)
                 print("INVALID: {}".format(line))
                 continue
 
-            if parsed is not None:
+            if parsed is None:
+                if self._invalid:
+                    print("IGNORED: {}".format(line))
+            else:
                 self._data.append(parsed)
                 self.new_data.emit(parsed)
 
@@ -136,15 +159,27 @@ class Process(QObject):
         assert ok
         assert self.is_running()
 
+    def before_test(self):
+        """Restart process before a test if it exited before."""
+        self._invalid = []
+        if not self.is_running():
+            self.start()
+
     def after_test(self):
         """Clean up data after each test.
 
         Also checks self._invalid so the test counts as failed if there were
         unexpected output lines earlier.
         """
-        self._data.clear()
         if self._invalid:
-            raise InvalidLine
+            # Wait for a bit so the full error has a chance to arrive
+            time.sleep(1)
+            # Exit the process to make sure we're in a defined state again
+            self.terminate()
+            self._data.clear()
+            raise InvalidLine(self._invalid)
+
+        self._data.clear()
         if not self.is_running():
             raise ProcessExited
 
@@ -157,32 +192,64 @@ class Process(QObject):
         """Check if the process is currently running."""
         return self.proc.state() == QProcess.Running
 
-    def wait_for(self, timeout=15000, **kwargs):
+    def _match_data(self, value, expected):
+        """Helper for wait_for to match a given value.
+
+        The behavior of this method is slightly different depending on the
+        types of the filtered values:
+
+        - If expected is None, the filter always matches.
+        - If the value is a string or bytes object and the expected value is
+          too, the pattern is treated as a glob pattern (with only * active).
+        - If the value is a string or bytes object and the expected value is a
+          compiled regex, it is used for matching.
+        - If the value is any other type, == is used.
+
+        Return:
+            A bool
+        """
+        regex_type = type(re.compile(''))
+        if expected is None:
+            return True
+        elif isinstance(expected, regex_type):
+            return expected.match(value)
+        elif isinstance(value, (bytes, str)):
+            return utils.pattern_match(pattern=expected, value=value)
+        else:
+            return value == expected
+
+    def wait_for(self, timeout=None, **kwargs):
         """Wait until a given value is found in the data.
 
         Keyword arguments to this function get interpreted as attributes of the
         searched data. Every given argument is treated as a pattern which
         the attribute has to match against.
 
-        The behavior of this method is slightly different depending on the
-        types of the filtered values:
-
-        - If the value is a string or bytes object and the expected value is
-          too, the pattern is treated as a fnmatch glob pattern.
-        - If the value is a string or bytes object and the expected value is a
-          compiled regex, it is used for matching.
-        - If the value is any other type, == is used.
-
         Return:
             The matched line.
         """
+        __tracebackhide__ = True
+        if timeout is None:
+            if 'CI' in os.environ:
+                timeout = 15000
+            else:
+                timeout = 5000
+        # Search existing messages
+        for line in self._data:
+            matches = []
 
-        # FIXME make this a context manager which inserts a marker in
-        # self._data in __enter__ and checks if the signal already did arrive
-        # after marker in __exit__, and if not, waits?
+            for key, expected in kwargs.items():
+                value = getattr(line, key)
+                matches.append(self._match_data(value, expected))
 
-        regex_type = type(re.compile(''))
+            if all(matches) and not line.waited_for:
+                # If we waited for this line, chances are we don't mean the
+                # same thing the next time we use wait_for and it matches
+                # this line again.
+                line.waited_for = True
+                return line
 
+        # If there is none, wait for the message
         spy = QSignalSpy(self.new_data)
         elapsed_timer = QElapsedTimer()
         elapsed_timer.start()
@@ -200,17 +267,12 @@ class Process(QObject):
                 matches = []
 
                 for key, expected in kwargs.items():
-                    if expected is None:
-                        continue
-
                     value = getattr(line, key)
-
-                    if isinstance(expected, regex_type):
-                        matches.append(expected.match(value))
-                    elif isinstance(value, (bytes, str)):
-                        matches.append(fnmatch.fnmatchcase(value, expected))
-                    else:
-                        matches.append(value == expected)
+                    matches.append(self._match_data(value, expected))
 
                 if all(matches):
+                    # If we waited for this line, chances are we don't mean the
+                    # same thing the next time we use wait_for and it matches
+                    # this line again.
+                    line.waited_for = True
                     return line

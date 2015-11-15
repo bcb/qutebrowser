@@ -17,9 +17,16 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-# pylint: disable=unused-import
+import logging
 
-"""Things needed for integration testing."""
+import pytest_bdd as bdd
+bdd.scenarios('set.feature')
 
-from webserver import httpbin, httpbin_after_test
-from quteprocess import quteproc, quteproc_after_test
+
+@bdd.then(bdd.parsers.parse("{section} -> {option} should be {value}"))
+def check_option(quteproc, section, option, value):
+    quteproc.send_cmd(':set {} {}?'.format(section, option))
+    msg = quteproc.wait_for(loglevel=logging.INFO, category='message',
+                            message='{} {} = *'.format(section, option))
+    actual_value = msg.message.split(' = ')[1]
+    assert actual_value == value

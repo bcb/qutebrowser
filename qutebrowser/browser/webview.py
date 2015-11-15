@@ -159,7 +159,7 @@ class WebView(QWebView):
         return page
 
     def __repr__(self):
-        url = utils.elide(self.url().toDisplayString(), 50)
+        url = utils.elide(self.url().toDisplayString(), 100)
         return utils.get_repr(self, tab_id=self.tab_id, url=url)
 
     def __del__(self):
@@ -292,7 +292,7 @@ class WebView(QWebView):
         try:
             elem = webelem.focus_elem(self.page().currentFrame())
         except (webelem.IsNullError, RuntimeError):
-            log.mouse.warning("Element/page vanished!")
+            log.mouse.debug("Element/page vanished!")
             return
         if elem.is_editable():
             log.mouse.debug("Clicked editable element (delayed)!")

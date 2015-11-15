@@ -34,7 +34,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir,
 
 from scripts import utils
 
-
 Message = collections.namedtuple('Message', 'typ, text')
 MsgType = enum.Enum('MsgType', 'insufficent_coverage, perfect_file')
 
@@ -48,6 +47,8 @@ PERFECT_FILES = [
     ('tests/unit/commands/test_argparser.py',
         'qutebrowser/commands/argparser.py'),
 
+    ('tests/unit/browser/test_cache.py',
+        'qutebrowser/browser/cache.py'),
     ('tests/unit/browser/test_cookies.py',
         'qutebrowser/browser/cookies.py'),
     ('tests/unit/browser/test_tabhistory.py',
@@ -141,6 +142,18 @@ class Skipped(Exception):
         super().__init__("Skipping coverage checks " + reason)
 
 
+def _get_filename(filename):
+    """Transform the absolute test filenames to relative ones."""
+    if os.path.isabs(filename):
+        basedir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', '..'))
+        common_path = os.path.commonprefix([basedir, filename])
+        if common_path:
+            filename = filename[len(common_path):].lstrip('/')
+
+    return filename
+
+
 def check(fileobj, perfect_files):
     """Main entry point which parses/checks coverage.xml if applicable."""
     if sys.platform != 'linux':
@@ -166,7 +179,8 @@ def check(fileobj, perfect_files):
     messages = []
 
     for klass in classes:
-        filename = klass.attrib['filename']
+        filename = _get_filename(klass.attrib['filename'])
+
         line_cov = float(klass.attrib['line-rate']) * 100
         branch_cov = float(klass.attrib['branch-rate']) * 100
 
@@ -248,9 +262,9 @@ def main():
     """
     utils.change_cwd()
     if '--check-all' in sys.argv:
-        main_check_all()
+        return main_check_all()
     else:
-        main_check()
+        return main_check()
 
 
 if __name__ == '__main__':
