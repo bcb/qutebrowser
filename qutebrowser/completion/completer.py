@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -383,10 +383,7 @@ class Completer(QObject):
         """Get the part index of the commandline where the cursor is over."""
         cursor_pos = self._cmd.cursorPosition()
         snippet = slice(cursor_pos - 1, cursor_pos + 1)
-        if self._cmd.text()[snippet] == '  ':
-            spaces = True
-        else:
-            spaces = False
+        spaces = self._cmd.text()[snippet] == '  '
         cursor_pos -= len(self._cmd.prefix())
         parts = self.split(keep=True)
         log.completion.vdebug(

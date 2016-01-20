@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Daniel Schadt
+# Copyright 2015-2016 Daniel Schadt
 #
 # This file is part of qutebrowser.
 #
@@ -24,6 +24,7 @@ import pytest
 from qutebrowser.mainwindow import tabwidget
 from qutebrowser.config import configtypes
 from PyQt5.QtGui import QIcon, QPixmap, QFont, QColor
+from PyQt5.QtCore import Qt
 
 
 class TestTabWidget:
@@ -44,6 +45,7 @@ class TestTabWidget:
             'indicator-width': 3,
             'indicator-padding': configtypes.PaddingValues(2, 2, 0, 4),
             'title-format': '{index}: {title}',
+            'title-alignment': Qt.AlignLeft,
         },
         'colors': {
             'tabs.bg.bar': QColor(),

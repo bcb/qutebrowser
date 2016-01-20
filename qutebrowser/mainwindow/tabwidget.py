@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -532,8 +532,7 @@ class TabBarStyle(QCommonStyle):
         """
         color = opt.palette.base().color()
         rect = layouts.indicator
-        indicator_width = config.get('tabs', 'indicator-width')
-        if color.isValid() and indicator_width != 0:
+        if color.isValid() and rect.isValid():
             p.fillRect(rect, color)
 
     def _draw_icon(self, layouts, opt, p):
@@ -578,7 +577,8 @@ class TabBarStyle(QCommonStyle):
         elif element == QStyle.CE_TabBarTabLabel:
             if not opt.icon.isNull() and layouts.icon.isValid():
                 self._draw_icon(layouts, opt, p)
-            alignment = Qt.AlignLeft | Qt.AlignVCenter | Qt.TextHideMnemonic
+            alignment = (config.get('tabs', 'title-alignment') |
+                         Qt.AlignVCenter | Qt.TextHideMnemonic)
             self._style.drawItemText(p, layouts.text, alignment, opt.palette,
                                      opt.state & QStyle.State_Enabled,
                                      opt.text, QPalette.WindowText)
@@ -643,7 +643,6 @@ class TabBarStyle(QCommonStyle):
         indicator_padding = config.get('tabs', 'indicator-padding')
 
         text_rect = QRect(opt.rect)
-        indicator_rect = QRect(opt.rect)
 
         qtutils.ensure_valid(text_rect)
         text_rect.adjust(padding.left, padding.top, -padding.right,
@@ -651,8 +650,9 @@ class TabBarStyle(QCommonStyle):
 
         indicator_width = config.get('tabs', 'indicator-width')
         if indicator_width == 0:
-            indicator_rect = 0
+            indicator_rect = QRect()
         else:
+            indicator_rect = QRect(opt.rect)
             qtutils.ensure_valid(indicator_rect)
             indicator_rect.adjust(padding.left + indicator_padding.left,
                                   padding.top + indicator_padding.top,

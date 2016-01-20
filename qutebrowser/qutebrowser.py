@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -44,7 +44,7 @@ from qutebrowser.misc import earlyinit
 
 def get_argparser():
     """Get the argparse parser."""
-    parser = argparse.ArgumentParser("usage: qutebrowser",
+    parser = argparse.ArgumentParser(prog='qutebrowser',
                                      description=qutebrowser.__description__)
     parser.add_argument('-c', '--confdir', help="Set config directory (empty "
                         "for no config storage).")
@@ -70,6 +70,7 @@ def get_argparser():
                         help="How URLs should be opened if there is already a "
                              "qutebrowser instance running.")
     parser.add_argument('--json-args', help=argparse.SUPPRESS)
+    parser.add_argument('--temp-basedir-restarted', help=argparse.SUPPRESS)
 
     debug = parser.add_argument_group('debug arguments')
     debug.add_argument('-l', '--loglevel', dest='loglevel',

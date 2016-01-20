@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -43,8 +43,8 @@ ElemTuple = collections.namedtuple('ElemTuple', ['elem', 'label'])
 
 Target = usertypes.enum('Target', ['normal', 'tab', 'tab_fg', 'tab_bg',
                                    'window', 'yank', 'yank_primary', 'run',
-                                   'fill', 'hover', 'rapid', 'rapid_win',
-                                   'download', 'userscript', 'spawn'])
+                                   'fill', 'hover', 'download', 'userscript',
+                                   'spawn'])
 
 
 @pyqtSlot(usertypes.KeyMode)
@@ -69,7 +69,6 @@ class HintContext:
                 yank/yank_primary: Yank to clipboard/primary selection.
                 run: Run a command.
                 fill: Fill commandline with link.
-                rapid: Rapid mode with background tabs
                 download: Download the link.
                 userscript: Call a custom userscript.
                 spawn: Spawn a simple command.
@@ -415,8 +414,6 @@ class HintManager(QObject):
             context: The HintContext to use.
         """
         target_mapping = {
-            Target.rapid: usertypes.ClickTarget.tab_bg,
-            Target.rapid_win: usertypes.ClickTarget.window,
             Target.normal: usertypes.ClickTarget.normal,
             Target.tab_fg: usertypes.ClickTarget.tab,
             Target.tab_bg: usertypes.ClickTarget.tab_bg,
@@ -437,7 +434,7 @@ class HintManager(QObject):
             action, elem, pos.x(), pos.y()))
         self.start_hinting.emit(target_mapping[context.target])
         if context.target in [Target.tab, Target.tab_fg, Target.tab_bg,
-                              Target.window, Target.rapid, Target.rapid_win]:
+                              Target.window]:
             modifiers = Qt.ControlModifier
         else:
             modifiers = Qt.NoModifier
@@ -471,8 +468,10 @@ class HintManager(QObject):
         mode = QClipboard.Selection if sel else QClipboard.Clipboard
         urlstr = url.toString(QUrl.FullyEncoded | QUrl.RemovePassword)
         QApplication.clipboard().setText(urlstr, mode)
-        message.info(self._win_id, "URL yanked to {}".format(
-            "primary selection" if sel else "clipboard"))
+        msg = "Yanked URL to {}: {}".format(
+            "primary selection" if sel else "clipboard",
+            urlstr)
+        message.info(self._win_id, msg)
 
     def _run_cmd(self, url, context):
         """Run the command based on a hint URL.
@@ -802,7 +801,6 @@ class HintManager(QObject):
         self._context.args = args
         self._context.mainframe = mainframe
         self._context.group = group
-        self._handle_old_rapid_targets(win_id)
         self._init_elements()
         message_bridge = objreg.get('message-bridge', scope='window',
                                     window=self._win_id)
@@ -810,29 +808,6 @@ class HintManager(QObject):
         self._connect_frame_signals()
         modeman.enter(self._win_id, usertypes.KeyMode.hint,
                       'HintManager.start')
-
-    def _handle_old_rapid_targets(self, win_id):
-        """Switch to the new way for rapid hinting with a rapid target.
-
-        Args:
-            win_id: The window ID to display the warning in.
-
-        DEPRECATED.
-        """
-        old_rapid_targets = {
-            Target.rapid: Target.tab_bg,
-            Target.rapid_win: Target.window,
-        }
-        target = self._context.target
-        if target in old_rapid_targets:
-            self._context.target = old_rapid_targets[target]
-            self._context.rapid = True
-            name = target.name.replace('_', '-')
-            group_name = self._context.group.name.replace('_', '-')
-            new_name = self._context.target.name.replace('_', '-')
-            message.warning(
-                win_id, ':hint with target {} is deprecated, use :hint '
-                '--rapid {} {} instead!'.format(name, group_name, new_name))
 
     def handle_partial_key(self, keystr):
         """Handle a new partial keypress."""
@@ -859,7 +834,7 @@ class HintManager(QObject):
         """Filter displayed hints according to a text.
 
         Args:
-            filterstr: The string to filer with, or None to show all.
+            filterstr: The string to filter with, or None to show all.
         """
         for elems in self._context.elems.values():
             try:

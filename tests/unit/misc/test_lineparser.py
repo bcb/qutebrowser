@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -27,7 +27,7 @@ import pytest
 from qutebrowser.misc import lineparser as lineparsermod
 
 
-class LineParserWrapper:
+class LineParserMixin:
 
     """A wrapper over lineparser.BaseLineParser to make it testable."""
 
@@ -50,7 +50,7 @@ class LineParserWrapper:
         else:
             prev_val = None
 
-        if self._binary:  # pylint: disable=no-member
+        if self._binary:
             fobj = io.BytesIO(prev_val)
         else:
             fobj = io.StringIO(prev_val)
@@ -70,7 +70,7 @@ class LineParserWrapper:
         return True
 
 
-class AppendLineParserTestable(LineParserWrapper,
+class AppendLineParserTestable(LineParserMixin,
                                lineparsermod.AppendLineParser):
 
     """Wrapper over AppendLineParser to make it testable."""
@@ -78,14 +78,14 @@ class AppendLineParserTestable(LineParserWrapper,
     pass
 
 
-class LineParserTestable(LineParserWrapper, lineparsermod.LineParser):
+class LineParserTestable(LineParserMixin, lineparsermod.LineParser):
 
     """Wrapper over LineParser to make it testable."""
 
     pass
 
 
-class LimitLineParserTestable(LineParserWrapper,
+class LimitLineParserTestable(LineParserMixin,
                               lineparsermod.LimitLineParser):
 
     """Wrapper over LimitLineParser to make it testable."""

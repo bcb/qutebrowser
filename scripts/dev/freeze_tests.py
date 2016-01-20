@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -26,7 +26,7 @@ import os.path
 import sys
 import contextlib
 
-import cx_Freeze as cx  # pylint: disable=import-error
+import cx_Freeze as cx  # pylint: disable=import-error,useless-suppression
 # cx_Freeze is hard to install (needs C extensions) so we don't check for it.
 import pytest
 
@@ -55,7 +55,9 @@ def get_build_exe_options():
     opts = freeze.get_build_exe_options(skip_html=True)
     opts['includes'] += pytest.freeze_includes()  # pylint: disable=no-member
     opts['includes'] += ['unittest.mock', 'PyQt5.QtTest', 'hypothesis', 'bs4',
-                         'httpbin', 'jinja2.ext', 'xvfbwrapper']
+                         'httpbin', 'jinja2.ext', 'xvfbwrapper',
+                         'cherrypy.wsgiserver',
+                         'cherrypy.wsgiserver.wsgiserver3']
 
     httpbin_dir = os.path.dirname(httpbin.__file__)
     opts['include_files'] += [

@@ -19,6 +19,7 @@
 |<<download-open,download-open>>|Open the last/[count]th download.
 |<<download-remove,download-remove>>|Remove the last/[count]th download from the list.
 |<<download-retry,download-retry>>|Retry the first failed/[count]th download.
+|<<fake-key,fake-key>>|Send a fake keypress or key string to the website or qutebrowser.
 |<<forward,forward>>|Go forward in the history of the current tab.
 |<<fullscreen,fullscreen>>|Toggle fullscreen mode.
 |<<help,help>>|Show help about a command or setting.
@@ -145,13 +146,18 @@ Close the current window.
 
 [[download]]
 === download
-Syntax: +:download ['url'] ['dest']+
+Syntax: +:download [*--mhtml*] [*--dest* 'DEST'] ['url'] ['dest-old']+
 
 Download a given URL, or current page if no URL given.
 
+The form `:download [url] [dest]` is deprecated, use `:download --dest [dest] [url]` instead.
+
 ==== positional arguments
 * +'url'+: The URL to download. If not given, download the current page.
-* +'dest'+: The file path to write the download to, or not given to ask.
+
+==== optional arguments
+* +*-m*+, +*--mhtml*+: Download the current page and all assets as mhtml file.
+* +*-d*+, +*--dest*+: The file path to write the download to, or not given to ask.
 
 [[download-cancel]]
 === download-cancel
@@ -196,6 +202,20 @@ Retry the first failed/[count]th download.
 
 ==== count
 The index of the download to cancel.
+
+[[fake-key]]
+=== fake-key
+Syntax: +:fake-key [*--global*] 'keystring'+
+
+Send a fake keypress or key string to the website or qutebrowser.
+
+:fake-key xy - sends the keychain 'xy' :fake-key <Ctrl-x> - sends Ctrl-x :fake-key <Escape> - sends the escape key
+
+==== positional arguments
+* +'keystring'+: The keystring to send.
+
+==== optional arguments
+* +*-g*+, +*--global*+: If given, the keys are sent to the qutebrowser UI.
 
 [[forward]]
 === forward
@@ -381,6 +401,8 @@ The tab index to open the URL in.
 Syntax: +:paste [*--sel*] [*--tab*] [*--bg*] [*--window*]+
 
 Open a page from the clipboard.
+
+If the pasted text contains newlines, each line gets opened in its own tab.
 
 ==== optional arguments
 * +*-s*+, +*--sel*+: Use the primary selection instead of the clipboard.
@@ -1116,7 +1138,7 @@ This acts like readline's yank.
 
 [[scroll]]
 === scroll
-Syntax: +:scroll 'direction' ['dy']+
+Syntax: +:scroll 'direction'+
 
 Scroll the current tab in the given direction.
 
@@ -1204,8 +1226,10 @@ These commands are mainly intended for debugging. They are hidden if qutebrowser
 |Command|Description
 |<<debug-all-objects,debug-all-objects>>|Print a list of  all objects to the debug log.
 |<<debug-cache-stats,debug-cache-stats>>|Print LRU cache stats.
+|<<debug-clear-ssl-errors,debug-clear-ssl-errors>>|Clear remembered SSL error answers.
 |<<debug-console,debug-console>>|Show the debugging console.
 |<<debug-crash,debug-crash>>|Crash for debugging purposes.
+|<<debug-dump-page,debug-dump-page>>|Dump the current page's content to a file.
 |<<debug-pyeval,debug-pyeval>>|Evaluate a python string and display the results as a web page.
 |<<debug-trace,debug-trace>>|Trace executed code via hunter.
 |<<debug-webaction,debug-webaction>>|Execute a webaction.
@@ -1217,6 +1241,10 @@ Print a list of  all objects to the debug log.
 [[debug-cache-stats]]
 === debug-cache-stats
 Print LRU cache stats.
+
+[[debug-clear-ssl-errors]]
+=== debug-clear-ssl-errors
+Clear remembered SSL error answers.
 
 [[debug-console]]
 === debug-console
@@ -1231,14 +1259,29 @@ Crash for debugging purposes.
 ==== positional arguments
 * +'typ'+: either 'exception' or 'segfault'.
 
+[[debug-dump-page]]
+=== debug-dump-page
+Syntax: +:debug-dump-page [*--plain*] 'dest'+
+
+Dump the current page's content to a file.
+
+==== positional arguments
+* +'dest'+: Where to write the file to.
+
+==== optional arguments
+* +*-p*+, +*--plain*+: Write plain text instead of HTML.
+
 [[debug-pyeval]]
 === debug-pyeval
-Syntax: +:debug-pyeval 's'+
+Syntax: +:debug-pyeval [*--quiet*] 's'+
 
 Evaluate a python string and display the results as a web page.
 
 ==== positional arguments
 * +'s'+: The string to evaluate.
+
+==== optional arguments
+* +*-q*+, +*--quiet*+: Don't show the output in a new tab.
 
 ==== note
 * This command does not split arguments after the last argument and handles quotes literally.

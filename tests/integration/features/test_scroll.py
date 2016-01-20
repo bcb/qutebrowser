@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -39,7 +39,7 @@ def check_scrolled(quteproc, direction):
         assert y != 0
 
 
-@bdd.then("the page should not be scrolled.")
+@bdd.then("the page should not be scrolled")
 def check_not_scrolled(quteproc):
     x, y = _get_scroll_values(quteproc)
     assert x == 0

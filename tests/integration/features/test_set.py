@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -17,16 +17,11 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-import logging
-
 import pytest_bdd as bdd
 bdd.scenarios('set.feature')
 
 
 @bdd.then(bdd.parsers.parse("{section} -> {option} should be {value}"))
 def check_option(quteproc, section, option, value):
-    quteproc.send_cmd(':set {} {}?'.format(section, option))
-    msg = quteproc.wait_for(loglevel=logging.INFO, category='message',
-                            message='{} {} = *'.format(section, option))
-    actual_value = msg.message.split(' = ')[1]
+    actual_value = quteproc.get_setting(section, option)
     assert actual_value == value

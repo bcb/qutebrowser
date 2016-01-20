@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -262,7 +262,7 @@ def _get_action_metavar(action, nargs=1):
             elems = action.metavar
         return ' '.join("'{}'".format(e) for e in elems)
     elif action.choices is not None:
-        choices = ','.join(map(str, action.choices))
+        choices = ','.join(str(e) for e in action.choices)
         return "'{{{}}}'".format(choices)
     else:
         return "'{}'".format(action.dest.upper())
@@ -347,6 +347,32 @@ def generate_commands(filename):
             f.write(_get_command_doc(name, cmd))
 
 
+def _generate_setting_section(f, sectname, sect):
+    """Generate documentation for a single section."""
+    for optname, option in sect.items():
+        f.write("\n")
+        f.write('[[{}-{}]]'.format(sectname, optname) + "\n")
+        f.write("=== {}".format(optname) + "\n")
+        f.write(sect.descriptions[optname] + "\n")
+        f.write("\n")
+        valid_values = option.typ.valid_values
+        if valid_values is not None:
+            f.write("Valid values:\n")
+            f.write("\n")
+            for val in valid_values:
+                try:
+                    desc = valid_values.descriptions[val]
+                    f.write(" * +{}+: {}".format(val, desc) + "\n")
+                except KeyError:
+                    f.write(" * +{}+".format(val) + "\n")
+            f.write("\n")
+        if option.default():
+            f.write("Default: +pass:[{}]+\n".format(html.escape(
+                option.default())))
+        else:
+            f.write("Default: empty\n")
+
+
 def generate_settings(filename):
     """Generate the complete settings section."""
     with _open_file(filename) as f:
@@ -359,28 +385,7 @@ def generate_settings(filename):
             if not getattr(sect, 'descriptions'):
                 pass
             else:
-                for optname, option in sect.items():
-                    f.write("\n")
-                    f.write('[[{}-{}]]'.format(sectname, optname) + "\n")
-                    f.write("=== {}".format(optname) + "\n")
-                    f.write(sect.descriptions[optname] + "\n")
-                    f.write("\n")
-                    valid_values = option.typ.valid_values
-                    if valid_values is not None:
-                        f.write("Valid values:\n")
-                        f.write("\n")
-                        for val in valid_values:
-                            try:
-                                desc = valid_values.descriptions[val]
-                                f.write(" * +{}+: {}".format(val, desc) + "\n")
-                            except KeyError:
-                                f.write(" * +{}+".format(val) + "\n")
-                        f.write("\n")
-                    if option.default():
-                        f.write("Default: +pass:[{}]+\n".format(html.escape(
-                            option.default())))
-                    else:
-                        f.write("Default: empty\n")
+                _generate_setting_section(f, sectname, sect)
 
 
 def _get_authors():
@@ -389,6 +394,10 @@ def _get_authors():
         'binix': 'sbinix',
         'Averrin': 'Alexey "Averrin" Nabrodov',
         'Alexey Nabrodov': 'Alexey "Averrin" Nabrodov',
+        'Michael': 'Halfwit',
+        'Error 800': 'error800',
+        'larryhynes': 'Larry Hynes',
+        'Daniel': 'Daniel Schadt',
     }
     commits = subprocess.check_output(['git', 'log', '--format=%aN'])
     authors = [corrections.get(author, author)

@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -62,19 +62,24 @@ def _parse_search_term(s):
     Return:
         A (engine, term) tuple, where engine is None for the default engine.
     """
-    m = re.search(r'(^\w+)\s+(.+)($|\s+)', s)
-    if m:
-        engine = m.group(1)
+    s = s.strip()
+    split = s.split(maxsplit=1)
+
+    if len(split) == 2:
+        engine = split[0]
         try:
             config.get('searchengines', engine)
         except configexc.NoOptionError:
             engine = None
             term = s
         else:
-            term = m.group(2).rstrip()
+            term = split[1]
+    elif not split:
+        raise ValueError("Empty search term!")
     else:
         engine = None
         term = s
+
     log.url.debug("engine {}, term '{}'".format(engine, term))
     return (engine, term)
 
@@ -165,6 +170,7 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
     Return:
         A target QUrl to a search page or the original URL.
     """
+    urlstr = urlstr.strip()
     expanded = os.path.expanduser(urlstr)
     if os.path.isabs(expanded):
         path = expanded
@@ -178,11 +184,10 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
     else:
         path = None
 
-    stripped = urlstr.strip()
     if path is not None and os.path.exists(path):
         log.url.debug("URL is a local file")
         url = QUrl.fromLocalFile(path)
-    elif (not do_search) or is_url(stripped):
+    elif (not do_search) or is_url(urlstr):
         # probably an address
         log.url.debug("URL is a fuzzy address")
         url = qurl_from_user_input(urlstr)
@@ -191,7 +196,7 @@ def fuzzy_url(urlstr, cwd=None, relative=False, do_search=True):
         try:
             url = _get_search_url(urlstr)
         except ValueError:  # invalid search engine
-            url = qurl_from_user_input(stripped)
+            url = qurl_from_user_input(urlstr)
     log.url.debug("Converting fuzzy term {} to URL -> {}".format(
                   urlstr, url.toDisplayString()))
     if do_search and config.get('general', 'auto-search'):
@@ -250,8 +255,12 @@ def is_url(urlstr):
     if not autosearch:
         # no autosearch, so everything is a URL unless it has an explicit
         # search engine.
-        engine, _term = _parse_search_term(urlstr)
-        return engine is None
+        try:
+            engine, _term = _parse_search_term(urlstr)
+        except ValueError:
+            return False
+        else:
+            return engine is None
 
     if not qurl_userinput.isValid():
         # This will also catch URLs containing spaces.
@@ -424,12 +433,21 @@ def same_domain(url1, url2):
     if suffix1 == '':
         return url1.host() == url2.host()
 
-    if not suffix1 == suffix2:
+    if suffix1 != suffix2:
         return False
 
     domain1 = url1.host()[:-len(suffix1)].split('.')[-1]
     domain2 = url2.host()[:-len(suffix2)].split('.')[-1]
     return domain1 == domain2
+
+
+def encoded_url(url):
+    """Return the fully encoded url as string.
+
+    Args:
+        url: The url to encode as QUrl.
+    """
+    return bytes(url.toEncoded()).decode('ascii')
 
 
 class IncDecError(Exception):

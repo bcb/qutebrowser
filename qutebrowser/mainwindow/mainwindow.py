@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -264,7 +264,6 @@ class MainWindow(QWidget):
 
     def _connect_signals(self):
         """Connect all mainwindow signals."""
-        # pylint: disable=too-many-statements
         key_config = objreg.get('key-config')
 
         status = self._get_object('statusbar')
@@ -418,9 +417,6 @@ class MainWindow(QWidget):
                                       window=self.win_id)
         download_count = download_manager.rowCount()
         quit_texts = []
-        # Close if set to never ask for confirmation
-        if 'never' in confirm_quit:
-            pass
         # Ask if multiple-tabs are open
         if 'multiple-tabs' in confirm_quit and tab_count > 1:
             quit_texts.append("{} {} open.".format(

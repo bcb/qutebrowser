@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -80,6 +80,7 @@ def whitelist_generator():
     # https://bitbucket.org/jendrikseipp/vulture/issues/10/
     yield 'qutebrowser.misc.utilcmds.pyeval_output'
     yield 'utils.use_color'
+    yield 'qutebrowser.browser.mhtml.last_used_directory'
 
     # Other false-positives
     yield ('qutebrowser.completion.models.sortfilter.CompletionFilterModel().'
@@ -88,11 +89,15 @@ def whitelist_generator():
     yield 'qutebrowser.utils.log.VDEBUG'
     yield 'qutebrowser.utils.log.QtWarningFilter.filter'
     yield 'logging.LogRecord.log_color'
+    yield 'qutebrowser.browser.pdfjs.is_available'
+    # vulture doesn't notice the hasattr() and thus thinks netrc_used is unused
+    # in NetworkManager.on_authentication_required
+    yield 'PyQt5.QtNetwork.QNetworkReply.netrc_used'
 
     for attr in ('fileno', 'truncate', 'closed', 'readable'):
         yield 'qutebrowser.utils.qtutils.PyQIODevice.' + attr
 
-    for attr in ('priority', 'visit_callfunc'):
+    for attr in ('priority', 'visit_call'):
         yield 'scripts.dev.pylint_checkers.config.' + attr
 
     yield 'scripts.dev.pylint_checkers.modeline.process_module'

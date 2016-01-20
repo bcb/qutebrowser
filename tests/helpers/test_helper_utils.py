@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -20,7 +20,7 @@
 
 import pytest
 
-from helpers import utils  # pylint: disable=import-error
+from helpers import utils
 
 
 @pytest.mark.parametrize('val1, val2', [

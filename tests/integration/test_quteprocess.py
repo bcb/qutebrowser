@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -25,23 +25,56 @@ import datetime
 import pytest
 
 import quteprocess
+import testprocess
 from qutebrowser.utils import log
 
 
-def test_quteproc_error_message(qtbot, quteproc):
+@pytest.mark.parametrize('cmd', [
+    ':message-error test',
+    ':jseval console.log("[FAIL] test");'
+])
+def test_quteproc_error_message(qtbot, quteproc, cmd):
     """Make sure the test fails with an unexpected error message."""
-    with qtbot.waitSignal(quteproc.got_error, raising=True):
-        quteproc.send_cmd(':message-error test')
+    with qtbot.waitSignal(quteproc.got_error):
+        quteproc.send_cmd(cmd)
     # Usually we wouldn't call this from inside a test, but here we force the
     # error to occur during the test rather than at teardown time.
     with pytest.raises(pytest.fail.Exception):
         quteproc.after_test()
 
 
+def test_quteproc_skip_via_js(qtbot, quteproc):
+    with pytest.raises(pytest.skip.Exception) as excinfo:
+        quteproc.send_cmd(':jseval console.log("[SKIP] test");')
+        quteproc.wait_for_js('[SKIP] test')
+
+        # Usually we wouldn't call this from inside a test, but here we force
+        # the error to occur during the test rather than at teardown time.
+        quteproc.after_test()
+
+    assert str(excinfo.value) == 'test'
+
+
+def test_quteproc_skip_and_wait_for(qtbot, quteproc):
+    """This test will skip *again* during teardown, but we don't care."""
+    with pytest.raises(pytest.skip.Exception):
+        quteproc.send_cmd(':jseval console.log("[SKIP] foo");')
+        quteproc.wait_for_js("[SKIP] foo")
+        quteproc.wait_for(message='This will not match')
+
+
 def test_qt_log_ignore(qtbot, quteproc):
     """Make sure the test passes when logging a qt_log_ignore message."""
-    with qtbot.waitSignal(quteproc.got_error, raising=True):
+    with qtbot.waitSignal(quteproc.got_error):
         quteproc.send_cmd(':message-error "SpellCheck: test"')
+
+
+def test_quteprocess_quitting(qtbot, quteproc_process):
+    """When qutebrowser quits, after_test should fail."""
+    with qtbot.waitSignal(quteproc_process.proc.finished, timeout=15000):
+        quteproc_process.send_cmd(':quit')
+    with pytest.raises(testprocess.ProcessExited):
+        quteproc_process.after_test()
 
 
 @pytest.mark.parametrize('data, attrs', [
@@ -104,7 +137,8 @@ def test_qt_log_ignore(qtbot, quteproc):
         '00:00:00 DEBUG    foo       foo:foo:0 [2s ago] test',
         {'prefix': '2s ago', 'message': 'test'}
     ),
-])
+], ids=['normal', 'vdebug', 'unknown module', 'expected message',
+        'weird Qt location', 'QXcbXSettings', '2s ago marker'])
 def test_log_line_parse(data, attrs):
     line = quteprocess.LogLine(data)
     for name, expected in attrs.items():
@@ -113,5 +147,5 @@ def test_log_line_parse(data, attrs):
 
 
 def test_log_line_no_match():
-    with pytest.raises(quteprocess.NoLineMatch):
+    with pytest.raises(testprocess.InvalidLine):
         quteprocess.LogLine("Hello World!")

@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -25,7 +25,8 @@ import sys
 import operator
 import os.path
 try:
-    from test import test_file  # pylint: disable=no-name-in-module
+    # pylint: disable=no-name-in-module,useless-suppression
+    from test import test_file
 except ImportError:
     # Debian patches Python to remove the tests...
     test_file = None
@@ -369,6 +370,7 @@ class SavefileTestException(Exception):
     pass
 
 
+@pytest.mark.usefixtures('qapp')
 class TestSavefileOpen:
 
     """Tests for savefile_open."""
@@ -747,17 +749,17 @@ class TestPyQIODevice:
 
     def test_seek_unsupported(self, pyqiodev):
         """Test seeking with unsupported whence arguments."""
+        # pylint: disable=no-member,useless-suppression
         if hasattr(os, 'SEEK_HOLE'):
-            whence = os.SEEK_HOLE  # pylint: disable=no-member
+            whence = os.SEEK_HOLE
         elif hasattr(os, 'SEEK_DATA'):
-            whence = os.SEEK_DATA  # pylint: disable=no-member
+            whence = os.SEEK_DATA
         else:
             pytest.skip("Needs os.SEEK_HOLE or os.SEEK_DATA available.")
         pyqiodev.open(QIODevice.ReadOnly)
         with pytest.raises(io.UnsupportedOperation):
             pyqiodev.seek(0, whence)
 
-    @pytest.mark.not_frozen
     def test_qprocess(self, py_proc):
         """Test PyQIODevice with a QProcess which is non-sequential.
 
@@ -931,6 +933,8 @@ class TestEventLoop:
     Attributes:
         loop: The EventLoop we're testing.
     """
+
+    # pylint: disable=attribute-defined-outside-init
 
     def _assert_executing(self):
         """Slot which gets called from timers to be sure the loop runs."""

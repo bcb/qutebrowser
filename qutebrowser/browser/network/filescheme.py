@@ -1,7 +1,7 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
-# Copyright 2015 Antoni Boucher (antoyo) <bouanto@zoho.com>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Antoni Boucher (antoyo) <bouanto@zoho.com>
 #
 # This file is part of qutebrowser.
 #
@@ -72,7 +72,7 @@ def dirbrowser_html(path):
     title = "Browse directory: {}".format(path)
     template = jinja.env.get_template('dirbrowser.html')
     # pylint: disable=no-member
-    # https://bitbucket.org/logilab/pylint/issue/490/
+    # WORKAROUND for https://bitbucket.org/logilab/pylint/issue/490/
 
     if is_root(path):
         parent = None

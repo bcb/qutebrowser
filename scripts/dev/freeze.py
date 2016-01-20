@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -29,7 +29,7 @@ import os.path
 import sys
 import distutils
 
-import cx_Freeze as cx  # pylint: disable=import-error
+import cx_Freeze as cx  # pylint: disable=import-error,useless-suppression
 # cx_Freeze is hard to install (needs C extensions) so we don't check for it.
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir,
@@ -66,6 +66,11 @@ def get_build_exe_options(skip_html=False):
         ('qutebrowser/utils/testfile', 'utils/testfile'),
         ('qutebrowser/html', 'html'),
     ]
+
+    if os.path.exists(os.path.join('qutebrowser', '3rdparty', 'pdfjs')):
+        include_files.append(('qutebrowser/3rdparty/pdfjs', '3rdparty/pdfjs'))
+    else:
+        print("Warning: excluding pdfjs as it's not present!")
 
     if not skip_html:
         include_files += [

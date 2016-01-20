@@ -1,5 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -225,27 +225,18 @@ class TestBaseType:
         assert basetype.complete() == completions
 
 
-class GoodMappingSubclass(configtypes.MappingType):
+class MappingSubclass(configtypes.MappingType):
 
     """A MappingType we use in TestMappingType which is valid/good."""
-
-    valid_values = configtypes.ValidValues('one', 'two')
 
     MAPPING = {
         'one': 1,
         'two': 2,
     }
 
-
-class BadMappingSubclass(configtypes.MappingType):
-
-    """A MappingType which is missing a value in MAPPING."""
-
-    valid_values = configtypes.ValidValues('one', 'two')
-
-    MAPPING = {
-        'one': 1,
-    }
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = configtypes.ValidValues('one', 'two')
 
 
 class TestMappingType:
@@ -261,7 +252,7 @@ class TestMappingType:
 
     @pytest.fixture
     def klass(self):
-        return GoodMappingSubclass
+        return MappingSubclass
 
     @pytest.mark.parametrize('val', TESTS.keys())
     def test_validate_valid(self, klass, val):
@@ -276,9 +267,11 @@ class TestMappingType:
     def test_transform(self, klass, val, expected):
         assert klass().transform(val) == expected
 
-    def test_bad_subclass_init(self):
-        with pytest.raises(ValueError):
-            BadMappingSubclass()
+    @pytest.mark.parametrize('typ', [configtypes.ColorSystem(),
+                                     configtypes.Position(),
+                                     configtypes.SelectOnRemove()])
+    def test_mapping_type_matches_valid_values(self, typ):
+        assert list(sorted(typ.MAPPING)) == list(sorted(typ.valid_values))
 
 
 class TestString:
@@ -312,6 +305,8 @@ class TestString:
         ({'minlen': 2}, 'fo'),
         ({'minlen': 2, 'maxlen': 3}, 'fo'),
         ({'minlen': 2, 'maxlen': 3}, 'foo'),
+        # valid_values
+        ({'valid_values': configtypes.ValidValues('fooo')}, 'fooo'),
     ])
     def test_validate_valid(self, klass, kwargs, val):
         klass(**kwargs).validate(val)
@@ -326,6 +321,8 @@ class TestString:
         ({'maxlen': 2}, 'fob'),
         ({'minlen': 2, 'maxlen': 3}, 'f'),
         ({'minlen': 2, 'maxlen': 3}, 'fooo'),
+        # valid_values
+        ({'valid_values': configtypes.ValidValues('blah')}, 'fooo'),
     ])
     def test_validate_invalid(self, klass, kwargs, val):
         with pytest.raises(configexc.ValidationError):
@@ -341,6 +338,15 @@ class TestString:
     ])
     def test_complete(self, klass, value):
         assert klass(completions=value).complete() == value
+
+    @pytest.mark.parametrize('valid_values, expected', [
+        (configtypes.ValidValues('one', 'two'),
+            [('one', ''), ('two', '')]),
+        (configtypes.ValidValues(('1', 'one'), ('2', 'two')),
+            [('1', 'one'), ('2', 'two')]),
+    ])
+    def test_complete_valid_values(self, klass, valid_values, expected):
+        assert klass(valid_values=valid_values).complete() == expected
 
 
 class TestList:
@@ -383,8 +389,11 @@ class FlagListSubclass(configtypes.FlagList):
     Valid values are 'foo', 'bar' and 'baz'.
     """
 
-    valid_values = configtypes.ValidValues('foo', 'bar', 'baz')
     combinable_values = ['foo', 'bar']
+
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = configtypes.ValidValues('foo', 'bar', 'baz')
 
 
 class TestFlagList:
@@ -1149,7 +1158,9 @@ class TestRegex:
     def test_validate_valid(self, klass, val):
         klass(none_ok=True).validate(val)
 
-    @pytest.mark.parametrize('val', [r'(foo|bar))?baz[fis]h', '', '(' * 500])
+    @pytest.mark.parametrize('val', [r'(foo|bar))?baz[fis]h', '', '(' * 500],
+                             ids=['unmatched parens', 'empty',
+                                  'too many parens'])
     def test_validate_invalid(self, klass, val):
         with pytest.raises(configexc.ValidationError):
             klass().validate(val)
@@ -1226,7 +1237,7 @@ class TestRegexList:
         r'',
         r'(foo|bar),((),1337{42}',
         r'(' * 500,
-    ])
+    ], ids=['empty value', 'empty', 'unmatched parens', 'too many parens'])
     def test_validate_invalid(self, klass, val):
         with pytest.raises(configexc.ValidationError):
             klass().validate(val)
@@ -1333,7 +1344,7 @@ class TestFileAndUserStyleSheet:
         (configtypes.File(), 'foobar', True),
         (configtypes.UserStyleSheet(), 'foobar', False),
         (configtypes.UserStyleSheet(), '\ud800', True),
-    ])
+    ], ids=['file-foobar', 'userstylesheet-foobar', 'userstylesheet-unicode'])
     def test_validate_rel_inexistent(self, os_mock, monkeypatch, configtype,
                                      value, raises):
         """Test with a relative path and standarddir.config returning None."""
@@ -1988,10 +1999,10 @@ class TestConfirmQuit:
         assert 'never' in completions
         assert 'multiple-tabs,downloads' in completions
         for val in completions:
-            assert not 'always,' in val
-            assert not ',always' in val
-            assert not 'never,' in val
-            assert not ',never' in val
+            assert 'always,' not in val
+            assert ',always' not in val
+            assert 'never,' not in val
+            assert ',never' not in val
 
 
 class TestFormatString:

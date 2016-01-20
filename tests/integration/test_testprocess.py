@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -74,13 +74,66 @@ class PythonProcess(testprocess.Process):
         return (sys.executable, ['-c', ';'.join(code)])
 
 
-class TestWaitFor:
+class QuitPythonProcess(testprocess.Process):
 
-    @pytest.yield_fixture
-    def pyproc(self):
-        proc = PythonProcess()
-        yield proc
-        proc.terminate()
+    """A testprocess which quits immediately."""
+
+    def __init__(self):
+        super().__init__()
+        self.proc.setReadChannel(QProcess.StandardOutput)
+
+    def _parse_line(self, line):
+        print("LINE: {}".format(line))
+        if line.strip() == 'ready':
+            self.ready.emit()
+        return testprocess.Line(line)
+
+    def _executable_args(self):
+        code = [
+            'import sys',
+            'print("ready")',
+            'sys.exit(0)',
+        ]
+        return (sys.executable, ['-c', ';'.join(code)])
+
+
+@pytest.yield_fixture
+def pyproc():
+    proc = PythonProcess()
+    yield proc
+    proc.terminate()
+
+
+@pytest.yield_fixture
+def quit_pyproc():
+    proc = QuitPythonProcess()
+    yield proc
+    proc.terminate()
+
+
+def test_quitting_process(qtbot, quit_pyproc):
+    with qtbot.waitSignal(quit_pyproc.proc.finished):
+        quit_pyproc.start()
+    with pytest.raises(testprocess.ProcessExited):
+        quit_pyproc.after_test()
+
+
+def test_quitting_process_expected(qtbot, quit_pyproc):
+    quit_pyproc.exit_expected = True
+    with qtbot.waitSignal(quit_pyproc.proc.finished):
+        quit_pyproc.start()
+    quit_pyproc.after_test()
+
+
+def test_wait_signal_raising(qtbot):
+    """testprocess._wait_signal should raise by default."""
+    proc = testprocess.Process()
+    with pytest.raises(qtbot.SignalTimeoutError):
+        with proc._wait_signal(proc.proc.started, timeout=0):
+            pass
+
+
+class TestWaitFor:
 
     def test_successful(self, pyproc):
         """Using wait_for with the expected text."""
@@ -134,3 +187,51 @@ class TestWaitFor:
         pyproc.wait_for(data="foobar")
         with pytest.raises(testprocess.WaitForTimeout):
             pyproc.wait_for(data="foobar", timeout=100)
+
+    def test_no_kwargs(self, pyproc):
+        """Using wait_for without kwargs should raise an exception.
+
+        Otherwise it'd match automatically because of the all(matches).
+        """
+        with pytest.raises(TypeError):
+            pyproc.wait_for()
+
+    def test_do_skip(self, pyproc):
+        """Test wait_for when getting no text at all, with do_skip."""
+        pyproc.code = "pass"
+        pyproc.start()
+        with pytest.raises(pytest.skip.Exception):
+            pyproc.wait_for(data="foobar", timeout=100, do_skip=True)
+
+
+class TestEnsureNotLogged:
+
+    @pytest.mark.parametrize('message, pattern', [
+        ('blacklisted', 'blacklisted'),
+        ('bl[a]cklisted', 'bl[a]cklisted'),
+        ('blacklisted', 'black*'),
+    ])
+    def test_existing_message(self, pyproc, message, pattern):
+        pyproc.code = "print('{}')".format(message)
+        pyproc.start()
+        with stopwatch(max_ms=1000):
+            with pytest.raises(testprocess.BlacklistedMessageError):
+                pyproc.ensure_not_logged(data=pattern, delay=2000)
+
+    def test_late_message(self, pyproc):
+        pyproc.code = "time.sleep(0.5); print('blacklisted')"
+        pyproc.start()
+        with pytest.raises(testprocess.BlacklistedMessageError):
+            pyproc.ensure_not_logged(data='blacklisted', delay=5000)
+
+    def test_no_matching_message(self, pyproc):
+        pyproc.code = "print('blacklisted... nope!')"
+        pyproc.start()
+        pyproc.ensure_not_logged(data='blacklisted', delay=100)
+
+    def test_wait_for_and_blacklist(self, pyproc):
+        pyproc.code = "print('blacklisted')"
+        pyproc.start()
+        pyproc.wait_for(data='blacklisted')
+        with pytest.raises(testprocess.BlacklistedMessageError):
+            pyproc.ensure_not_logged(data='blacklisted', delay=0)

@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -97,8 +97,6 @@ foo\ x\x\"/foo xx"/foo\ x\x\"/
 "foo\ x\x\\"\'"fo'obar"/foo\ x\x\'fo'obar/"foo\ x\x\\"\'"fo'obar"/
 "foo\ x\x\\"\'"fo'obar" 'don'\''t'/foo\ x\x\'fo'obar|don't/"foo\ x\x\\"\'"fo'obar"| 'don'\''t'/
 "foo\ x\x\\"\'"fo'obar" 'don'\''t' \\/foo\ x\x\'fo'obar|don't|\/"foo\ x\x\\"\'"fo'obar"| 'don'\''t'| \\/
-'foo\ bar'/foo\ bar/'foo\ bar'/
-'foo\\ bar'/foo\\ bar/'foo\\ bar'/
 foo\ bar/foo bar/foo\ bar/
 :-) ;-)/:-)|;-)/:-)| ;-)/
 áéíóú/áéíóú/áéíóú/
@@ -128,7 +126,7 @@ class TestSplit:
 
     """Test split."""
 
-    @pytest.fixture(params=_parse_split_test_data_str())
+    @pytest.fixture(params=_parse_split_test_data_str(), ids=lambda e: e.input)
     def split_test_case(self, request):
         """Fixture to automatically parametrize all depending tests.
 
@@ -165,20 +163,21 @@ class TestSimpleSplit:
         'foo\nbar': ['foo', '\nbar'],
     }
 
-    @pytest.mark.parametrize('test', TESTS)
+    @pytest.mark.parametrize('test', TESTS, ids=repr)
     def test_str_split(self, test):
         """Test if the behavior matches str.split."""
         assert split.simple_split(test) == test.rstrip().split()
 
     @pytest.mark.parametrize('s, maxsplit',
-                             [("foo bar baz", 1), ("  foo bar baz  ", 0)])
+                             [("foo bar baz", 1), ("  foo bar baz  ", 0)],
+                             ids=repr)
     def test_str_split_maxsplit(self, s, maxsplit):
         """Test if the behavior matches str.split with given maxsplit."""
         actual = split.simple_split(s, maxsplit=maxsplit)
         expected = s.rstrip().split(maxsplit=maxsplit)
         assert actual == expected
 
-    @pytest.mark.parametrize('test, expected', TESTS.items())
+    @pytest.mark.parametrize('test, expected', TESTS.items(), ids=repr)
     def test_split_keep(self, test, expected):
         """Test splitting with keep=True."""
         assert split.simple_split(test, keep=True) == expected

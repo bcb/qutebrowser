@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -76,12 +76,15 @@ class FakeWebFrame:
         focus_elem: The 'focused' element.
     """
 
-    def __init__(self, geometry, scroll=None, parent=None):
+    def __init__(self, geometry=None, *, scroll=None, plaintext=None,
+                 html=None, parent=None):
         """Constructor.
 
         Args:
             geometry: The geometry of the frame as QRect.
             scroll: The scroll position as QPoint.
+            plaintext: Return value of toPlainText
+            html: Return value of tohtml.
             parent: The parent frame.
         """
         if scroll is None:
@@ -90,6 +93,8 @@ class FakeWebFrame:
         self.scrollPosition = mock.Mock(return_value=scroll)
         self.parentFrame = mock.Mock(return_value=parent)
         self.focus_elem = None
+        self.toPlainText = mock.Mock(return_value=plaintext)
+        self.toHtml = mock.Mock(return_value=html)
 
     def findFirstElement(self, selector):
         if selector == '*:focus':
@@ -280,8 +285,6 @@ class FakeCommand:
 class FakeTimer(QObject):
 
     """Stub for a usertypes.Timer."""
-
-    # pylint: disable=missing-docstring
 
     timeout_signal = pyqtSignal()
 

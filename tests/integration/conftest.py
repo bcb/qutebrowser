@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -21,5 +21,6 @@
 
 """Things needed for integration testing."""
 
-from webserver import httpbin, httpbin_after_test
-from quteprocess import quteproc, quteproc_after_test
+from webserver import httpbin, httpbin_after_test, ssl_server
+from quteprocess import quteproc_process, quteproc
+from testprocess import pytest_runtest_makereport

@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -29,7 +29,8 @@ from qutebrowser.utils import message, log, objreg, qtutils
 from qutebrowser.misc import split
 
 
-ParseResult = collections.namedtuple('ParseResult', 'cmd, args, cmdline')
+ParseResult = collections.namedtuple('ParseResult', ['cmd', 'args', 'cmdline',
+                                                     'count'])
 
 
 def replace_variables(win_id, arglist):
@@ -117,6 +118,26 @@ class CommandRunner(QObject):
         for sub in sub_texts:
             yield self.parse(sub, *args, **kwargs)
 
+    def _parse_count(self, cmdstr):
+        """Split a count prefix off from a command for parse().
+
+        Args:
+            cmdstr: The command/args including the count.
+
+        Return:
+            A (count, cmdstr) tuple, with count being None or int.
+        """
+        if ':' not in cmdstr:
+            return (None, cmdstr)
+
+        count, cmdstr = cmdstr.split(':', maxsplit=1)
+        try:
+            count = int(count)
+        except ValueError:
+            # We just ignore invalid prefixes
+            count = None
+        return (count, cmdstr)
+
     def parse(self, text, *, aliases=True, fallback=False, keep=False):
         """Split the commandline text into command and arguments.
 
@@ -128,9 +149,11 @@ class CommandRunner(QObject):
             keep: Whether to keep special chars and whitespace
 
         Return:
-            A (cmd, args, cmdline) ParseResult tuple.
+            A ParseResult tuple.
         """
         cmdstr, sep, argstr = text.partition(' ')
+        count, cmdstr = self._parse_count(cmdstr)
+
         if not cmdstr and not fallback:
             raise cmdexc.NoSuchCommandError("No command given")
         if aliases:
@@ -161,7 +184,7 @@ class CommandRunner(QObject):
                 cmdline = [cmdstr, sep]
             else:
                 cmdline = [cmdstr] + args[:]
-        return ParseResult(cmd=cmd, args=args, cmdline=cmdline)
+        return ParseResult(cmd=cmd, args=args, cmdline=cmdline, count=count)
 
     def _split_args(self, cmd, argstr, keep):
         """Split the arguments from an arg string.
@@ -201,10 +224,10 @@ class CommandRunner(QObject):
                     maxsplit = i + cmd.maxsplit + flag_arg_count
                     return split.simple_split(argstr, keep=keep,
                                               maxsplit=maxsplit)
-            else:  # pylint: disable=useless-else-on-loop
-                # If there are only flags, we got it right on the first try
-                # already.
-                return split_args
+
+            # If there are only flags, we got it right on the first try
+            # already.
+            return split_args
 
     def run(self, text, count=None):
         """Parse a command from a line of text and run it.
@@ -216,7 +239,12 @@ class CommandRunner(QObject):
         for result in self.parse_all(text):
             args = replace_variables(self._win_id, result.args)
             if count is not None:
+                if result.count is not None:
+                    raise cmdexc.CommandMetaError("Got count via command and "
+                                                  "prefix!")
                 result.cmd.run(self._win_id, args, count=count)
+            elif result.count is not None:
+                result.cmd.run(self._win_id, args, count=result.count)
             else:
                 result.cmd.run(self._win_id, args)
 

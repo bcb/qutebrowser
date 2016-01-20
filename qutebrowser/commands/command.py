@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -75,7 +75,7 @@ class Command:
                  deprecated=False, no_cmd_split=False, scope='global',
                  count=None, win_id=None):
         # I really don't know how to solve this in a better way, I tried.
-        # pylint: disable=too-many-arguments,too-many-locals
+        # pylint: disable=too-many-locals
         if modes is not None and not_modes is not None:
             raise ValueError("Only modes or not_modes can be given!")
         if modes is not None:

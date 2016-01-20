@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -140,11 +140,14 @@ class CriticalQtWarning(Exception):
 
 def init_log(args):
     """Init loggers based on the argparse namespace passed."""
-    level = 'VDEBUG' if args.debug else args.loglevel.upper()
+    level = args.loglevel.upper()
     try:
         numeric_level = getattr(logging, level)
     except AttributeError:
         raise ValueError("Invalid log level: {}".format(args.loglevel))
+
+    if numeric_level > logging.DEBUG and args.debug:
+        numeric_level = logging.DEBUG
 
     console, ram = _init_handlers(numeric_level, args.color, args.loglines)
     root = logging.getLogger()
@@ -256,7 +259,7 @@ def qt_message_handler(msg_type, context, msg):
         QtCore.QtFatalMsg: logging.CRITICAL,
     }
     try:
-        # pylint: disable=no-member
+        # pylint: disable=no-member,useless-suppression
         qt_to_logging[QtCore.QtInfoMsg] = logging.INFO
     except AttributeError:
         # Qt < 5.5
@@ -272,6 +275,7 @@ def qt_message_handler(msg_type, context, msg):
         # https://bugreports.qt.io/browse/QTBUG-39788
         'libpng warning: iCCP: Not recognizing known sRGB profile that has '
             'been edited',  # noqa
+        'libpng warning: iCCP: known incorrect sRGB profile',
         # Hopefully harmless warning
         'OpenType support missing for script ',
         # Error if a QNetworkReply gets two different errors set. Harmless Qt
@@ -297,6 +301,11 @@ def qt_message_handler(msg_type, context, msg):
         'QXcbWindow: Unhandled client message: "_GTK_',
         # Happens on AppVeyor CI
         'SetProcessDpiAwareness failed:',
+        # https://bugreports.qt.io/browse/QTBUG-49174
+        'QObject::connect: Cannot connect (null)::stateChanged('
+            'QNetworkSession::State) to '
+            'QNetworkReplyHttpImpl::_q_networkSessionStateChanged('
+            'QNetworkSession::State)',
     ]
     if sys.platform == 'darwin':
         suppressed_msgs += [

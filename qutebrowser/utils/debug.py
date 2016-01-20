@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -156,7 +156,7 @@ def qflags_key(base, value, add_base=False, klass=None):
     names = []
     mask = 0x01
     value = int(value)
-    while mask < value:
+    while mask <= value:
         if value & mask:
             bits.append(mask)
         mask <<= 1

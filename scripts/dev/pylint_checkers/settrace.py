@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -35,8 +35,8 @@ class SetTraceChecker(BaseChecker):
     priority = -1
 
     @utils.check_messages('set-trace')
-    def visit_callfunc(self, node):
-        """Visit a CallFunc node."""
+    def visit_call(self, node):
+        """Visit a Call node."""
         if hasattr(node, 'func'):
             infer = utils.safe_infer(node.func)
             if infer:

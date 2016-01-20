@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -42,3 +42,12 @@ class TestCommandRunner:
         else:
             with pytest.raises(cmdexc.NoSuchCommandError):
                 list(cr.parse_all(cmdline_test.cmd, aliases=False))
+
+    def test_parse_with_count(self):
+        """Test parsing of commands with a count."""
+        cr = runners.CommandRunner(0)
+        result = cr.parse('20:scroll down', aliases=False)
+        assert result.cmd.name == 'scroll'
+        assert result.count == 20
+        assert result.args == ['down']
+        assert result.cmdline == ['scroll', 'down']

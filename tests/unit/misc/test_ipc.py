@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -31,7 +31,7 @@ import subprocess
 from unittest import mock
 
 import pytest
-import py.path  # pylint: disable=no-name-in-module,import-error
+import py.path  # pylint: disable=no-name-in-module
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtNetwork import QLocalServer, QLocalSocket, QAbstractSocket
 from PyQt5.QtTest import QSignalSpy
@@ -39,7 +39,7 @@ from PyQt5.QtTest import QSignalSpy
 import qutebrowser
 from qutebrowser.misc import ipc
 from qutebrowser.utils import objreg, qtutils
-from helpers import stubs  # pylint: disable=import-error
+from helpers import stubs
 
 
 Args = collections.namedtuple('Args', 'basedir')
@@ -316,7 +316,7 @@ class TestListen:
 
     @pytest.mark.posix
     def test_permissions_posix(self, ipc_server):
-        # pylint: disable=no-member
+        # pylint: disable=no-member,useless-suppression
         ipc_server.listen()
         sockfile = ipc_server._server.fullServerName()
         sockdir = os.path.dirname(sockfile)
@@ -343,13 +343,11 @@ class TestListen:
         ipc_server.listen()
         old_atime = os.stat(ipc_server._server.fullServerName()).st_atime_ns
 
-        with qtbot.waitSignal(ipc_server._atime_timer.timeout, timeout=2000,
-                              raising=True):
+        with qtbot.waitSignal(ipc_server._atime_timer.timeout, timeout=2000):
             pass
 
         # Make sure the timer is not singleShot
-        with qtbot.waitSignal(ipc_server._atime_timer.timeout, timeout=2000,
-                              raising=True):
+        with qtbot.waitSignal(ipc_server._atime_timer.timeout, timeout=2000):
             pass
 
         new_atime = os.stat(ipc_server._server.fullServerName()).st_atime_ns
@@ -412,9 +410,9 @@ class TestHandleConnection:
     def test_double_connection(self, qlocalsocket, ipc_server, caplog):
         ipc_server._socket = qlocalsocket
         ipc_server.handle_connection()
-        message = ("Got new connection but ignoring it because we're still "
-                   "handling another one.")
-        assert message in [rec.message for rec in caplog.records]
+        msg = ("Got new connection but ignoring it because we're still "
+               "handling another one")
+        assert any(rec.message.startswith(msg) for rec in caplog.records)
 
     def test_disconnected_immediately(self, ipc_server, caplog):
         socket = FakeSocket(state=QLocalSocket.UnconnectedState)
@@ -444,14 +442,10 @@ class TestHandleConnection:
 
         ipc_server._server = FakeServer(socket)
 
-        spy = QSignalSpy(ipc_server.got_args)
-        with qtbot.waitSignal(ipc_server.got_args, raising=True):
+        with qtbot.waitSignal(ipc_server.got_args) as blocker:
             ipc_server.handle_connection()
 
-        assert len(spy) == 1
-        assert spy[0][0] == ['foo']
-        assert spy[0][1] == 'tab'
-
+        assert blocker.args == [['foo'], 'tab', '']
         all_msgs = [r.message for r in caplog.records]
         assert "We can read a line immediately." in all_msgs
 
@@ -462,7 +456,7 @@ def connected_socket(qtbot, qlocalsocket, ipc_server):
         pytest.skip("Skipping connected_socket test - "
                     "https://github.com/The-Compiler/qutebrowser/issues/1045")
     ipc_server.listen()
-    with qtbot.waitSignal(ipc_server._server.newConnection, raising=True):
+    with qtbot.waitSignal(ipc_server._server.newConnection):
         qlocalsocket.connectToServer('qute-test')
     yield qlocalsocket
     qlocalsocket.disconnectFromServer()
@@ -500,22 +494,19 @@ NEW_VERSION = str(ipc.PROTOCOL_VERSION + 1).encode('utf-8')
     (b'{"args": [], "target_arg": null}\n', 'invalid version'),
 ])
 def test_invalid_data(qtbot, ipc_server, connected_socket, caplog, data, msg):
-    got_args_spy = QSignalSpy(ipc_server.got_args)
-
     signals = [ipc_server.got_invalid_data, connected_socket.disconnected]
     with caplog.at_level(logging.ERROR):
-        with qtbot.waitSignals(signals, raising=True):
-            connected_socket.write(data)
+        with qtbot.assertNotEmitted(ipc_server.got_args):
+            with qtbot.waitSignals(signals):
+                connected_socket.write(data)
 
     messages = [r.message for r in caplog.records]
-    assert messages[-1] == 'Ignoring invalid IPC data.'
+    assert messages[-1].startswith('Ignoring invalid IPC data from socket ')
     assert messages[-2].startswith(msg)
-    assert not got_args_spy
 
 
 def test_multiline(qtbot, ipc_server, connected_socket):
     spy = QSignalSpy(ipc_server.got_args)
-    error_spy = QSignalSpy(ipc_server.got_invalid_data)
 
     data = ('{{"args": ["one"], "target_arg": "tab",'
             ' "protocol_version": {version}}}\n'
@@ -523,16 +514,13 @@ def test_multiline(qtbot, ipc_server, connected_socket):
             ' "protocol_version": {version}}}\n'.format(
                 version=ipc.PROTOCOL_VERSION))
 
-    with qtbot.waitSignals([ipc_server.got_args, ipc_server.got_args],
-                           raising=True):
-        connected_socket.write(data.encode('utf-8'))
+    with qtbot.assertNotEmitted(ipc_server.got_invalid_data):
+        with qtbot.waitSignals([ipc_server.got_args, ipc_server.got_args]):
+            connected_socket.write(data.encode('utf-8'))
 
     assert len(spy) == 2
-    assert not error_spy
-    assert spy[0][0] == ['one']
-    assert spy[0][1] == 'tab'
-    assert spy[1][0] == ['two']
-    assert spy[1][1] == ''
+    assert spy[0] == [['one'], 'tab', '']
+    assert spy[1] == [['two'], '', '']
 
 
 class TestSendToRunningInstance:
@@ -547,24 +535,23 @@ class TestSendToRunningInstance:
     @pytest.mark.linux(reason="Causes random trouble on Windows and OS X")
     def test_normal(self, qtbot, tmpdir, ipc_server, mocker, has_cwd):
         ipc_server.listen()
-        spy = QSignalSpy(ipc_server.got_args)
         raw_spy = QSignalSpy(ipc_server.got_raw)
-        error_spy = QSignalSpy(ipc_server.got_invalid_data)
 
-        with qtbot.waitSignal(ipc_server.got_args, raising=True, timeout=5000):
-            with tmpdir.as_cwd():
-                if not has_cwd:
-                    m = mocker.patch('qutebrowser.misc.ipc.os')
-                    m.getcwd.side_effect = OSError
-                sent = ipc.send_to_running_instance('qute-test', ['foo'], None)
+        with qtbot.assertNotEmitted(ipc_server.got_invalid_data):
+            with qtbot.waitSignal(ipc_server.got_args,
+                                  timeout=5000) as blocker:
+                with tmpdir.as_cwd():
+                    if not has_cwd:
+                        m = mocker.patch('qutebrowser.misc.ipc.os')
+                        m.getcwd.side_effect = OSError
+                    sent = ipc.send_to_running_instance('qute-test', ['foo'],
+                                                        None)
 
-        assert sent
+            assert sent
 
-        assert not error_spy
         expected_cwd = str(tmpdir) if has_cwd else ''
 
-        assert len(spy) == 1
-        assert spy[0] == [['foo'], '', expected_cwd]
+        assert blocker.args == [['foo'], '', expected_cwd]
 
         assert len(raw_spy) == 1
         assert len(raw_spy[0]) == 1
@@ -605,15 +592,14 @@ def test_timeout(qtbot, caplog, qlocalsocket, ipc_server):
     ipc_server._timer.setInterval(100)
     ipc_server.listen()
 
-    with qtbot.waitSignal(ipc_server._server.newConnection, raising=True):
+    with qtbot.waitSignal(ipc_server._server.newConnection):
         qlocalsocket.connectToServer('qute-test')
 
     with caplog.at_level(logging.ERROR):
-        with qtbot.waitSignal(qlocalsocket.disconnected, raising=True,
-                              timeout=5000):
+        with qtbot.waitSignal(qlocalsocket.disconnected, timeout=5000):
             pass
 
-    assert caplog.records[-1].message == "IPC connection timed out."
+    assert caplog.records[-1].message.startswith("IPC connection timed out")
 
 
 @pytest.mark.parametrize('method, args, is_warning', [
@@ -677,7 +663,7 @@ class TestSendOrListen:
         yield legacy_server
         legacy_server.shutdown()
 
-    @pytest.mark.posix(reason="Flaky on Windows")
+    @pytest.mark.linux(reason="Flaky on Windows and OS X")
     def test_normal_connection(self, caplog, qtbot, args):
         ret_server = ipc.send_or_listen(args)
         assert isinstance(ret_server, ipc.IPCServer)
@@ -686,21 +672,20 @@ class TestSendOrListen:
         objreg_server = objreg.get('ipc-server')
         assert objreg_server is ret_server
 
-        with qtbot.waitSignal(ret_server.got_args, raising=True):
+        with qtbot.waitSignal(ret_server.got_args):
             ret_client = ipc.send_or_listen(args)
 
         assert ret_client is None
 
     @pytest.mark.posix(reason="Unneeded on Windows")
     def test_legacy_name(self, caplog, qtbot, args, legacy_server):
-        with qtbot.waitSignal(legacy_server.got_args, raising=True):
+        with qtbot.waitSignal(legacy_server.got_args):
             ret = ipc.send_or_listen(args)
         assert ret is None
         msgs = [e.message for e in caplog.records]
         assert "Connecting to {}".format(legacy_server._socketname) in msgs
 
     @pytest.mark.posix(reason="Unneeded on Windows")
-    @pytest.mark.not_frozen
     def test_stale_legacy_server(self, caplog, qtbot, args, legacy_server,
                                  ipc_server, py_proc):
         legacy_name = ipc._get_socketname(args.basedir, legacy=True)
@@ -735,7 +720,7 @@ class TestSendOrListen:
         assert isinstance(ret_server, ipc.IPCServer)
 
         logging.debug('== Connecting ==')
-        with qtbot.waitSignal(ret_server.got_args, raising=True):
+        with qtbot.waitSignal(ret_server.got_args):
             ret_client = ipc.send_or_listen(args)
 
         assert ret_client is None

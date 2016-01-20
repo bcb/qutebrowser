@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -25,7 +25,7 @@ import itertools
 import sys
 
 import pytest
-import pytest_catchlog  # pylint: disable=import-error
+import pytest_catchlog
 
 from qutebrowser.utils import log
 
@@ -217,8 +217,8 @@ class TestInitLog:
     @pytest.fixture
     def args(self):
         """Fixture providing an argparse namespace for init_log."""
-        return argparse.Namespace(debug=True, loglevel=logging.DEBUG,
-                                  color=True, loglines=10, logfilter="")
+        return argparse.Namespace(debug=True, loglevel='debug', color=True,
+                                  loglines=10, logfilter="")
 
     def test_stderr_none(self, args):
         """Test init_log with sys.stderr = None."""

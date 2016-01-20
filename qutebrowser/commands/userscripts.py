@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -33,7 +33,16 @@ from qutebrowser.misc import guiprocess
 
 class _QtFIFOReader(QObject):
 
-    """A FIFO reader based on a QSocketNotifier."""
+    """A FIFO reader based on a QSocketNotifier.
+
+    Attributes:
+        _filepath: The path to the opened FIFO.
+        _fifo: The Python file object for the FIFO.
+        _notifier: The QSocketNotifier used.
+
+    Signals:
+        got_line: Emitted when a whole line arrived.
+    """
 
     got_line = pyqtSignal(str)
 
@@ -44,9 +53,9 @@ class _QtFIFOReader(QObject):
         # See http://www.outflux.net/blog/archives/2008/03/09/using-select-on-a-fifo/
         # We also use os.open and os.fdopen rather than built-in open so we
         # can add O_NONBLOCK.
-        fd = os.open(filepath, os.O_RDWR |
-                     os.O_NONBLOCK)  # pylint: disable=no-member
-        self.fifo = os.fdopen(fd, 'r')
+        # pylint: disable=no-member,useless-suppression
+        fd = os.open(filepath, os.O_RDWR | os.O_NONBLOCK)
+        self._fifo = os.fdopen(fd, 'r')
         self._notifier = QSocketNotifier(fd, QSocketNotifier.Read, self)
         self._notifier.activated.connect(self.read_line)
 
@@ -55,13 +64,14 @@ class _QtFIFOReader(QObject):
         """(Try to) read a line from the FIFO."""
         log.procs.debug("QSocketNotifier triggered!")
         self._notifier.setEnabled(False)
-        for line in self.fifo:
+        for line in self._fifo:
             self.got_line.emit(line.rstrip('\r\n'))
         self._notifier.setEnabled(True)
 
     def cleanup(self):
         """Clean up so the FIFO can be closed."""
         self._notifier.setEnabled(False)
+        self._fifo.close()
 
 
 class _BaseUserscriptRunner(QObject):
@@ -98,11 +108,11 @@ class _BaseUserscriptRunner(QObject):
             verbose: Show notifications when the command started/exited.
         """
         self._env = {'QUTE_FIFO': self._filepath}
-        self._env.update(env)
+        if env is not None:
+            self._env.update(env)
         self._proc = guiprocess.GUIProcess(self._win_id, 'userscript',
                                            additional_env=self._env,
                                            verbose=verbose, parent=self)
-        self._proc.error.connect(self.on_proc_error)
         self._proc.finished.connect(self.on_proc_finished)
         self._proc.start(cmd, args)
 
@@ -147,10 +157,6 @@ class _BaseUserscriptRunner(QObject):
         """
         raise NotImplementedError
 
-    def on_proc_error(self, error):
-        """Called when the process encountered an error."""
-        raise NotImplementedError
-
 
 class _POSIXUserscriptRunner(_BaseUserscriptRunner):
 
@@ -175,7 +181,8 @@ class _POSIXUserscriptRunner(_BaseUserscriptRunner):
             # exist, it shouldn't be a big issue.
             self._filepath = tempfile.mktemp(prefix='qutebrowser-userscript-',
                                              dir=standarddir.runtime())
-            os.mkfifo(self._filepath)  # pylint: disable=no-member
+            # pylint: disable=no-member,useless-suppression
+            os.mkfifo(self._filepath)
         except OSError as e:
             message.error(self._win_id, "Error while creating FIFO: {}".format(
                 e))
@@ -190,15 +197,10 @@ class _POSIXUserscriptRunner(_BaseUserscriptRunner):
         """Interrupt the reader when the process finished."""
         self.finish()
 
-    def on_proc_error(self, error):
-        """Interrupt the reader when the process had an error."""
-        self.finish()
-
     def finish(self):
         """Quit the thread and clean up when the reader finished."""
         log.procs.debug("Cleaning up")
         self._reader.cleanup()
-        self._reader.fifo.close()
         self._reader.deleteLater()
         self._reader = None
         super()._cleanup()
@@ -245,11 +247,6 @@ class _WindowsUserscriptRunner(_BaseUserscriptRunner):
         self._cleanup()
         self.finished.emit()
 
-    def on_proc_error(self, error):
-        """Clean up when the process had an error."""
-        self._cleanup()
-        self.finished.emit()
-
     def run(self, cmd, *args, env=None, verbose=False):
         try:
             self._oshandle, self._filepath = tempfile.mkstemp(text=True)
@@ -260,7 +257,7 @@ class _WindowsUserscriptRunner(_BaseUserscriptRunner):
         self._run_process(cmd, *args, env=env, verbose=verbose)
 
 
-class _DummyUserscriptRunner:
+class _DummyUserscriptRunner(QObject):
 
     """Simple dummy runner which displays an error when using userscripts.
 
@@ -272,6 +269,10 @@ class _DummyUserscriptRunner:
     """
 
     finished = pyqtSignal()
+
+    def __init__(self, win_id, parent=None):
+        # pylint: disable=unused-argument
+        super().__init__(parent)
 
     def run(self, cmd, *args, env=None, verbose=False):
         """Print an error as userscripts are not supported."""
@@ -285,9 +286,9 @@ class _DummyUserscriptRunner:
 # right thing depending on the platform.
 if os.name == 'posix':
     UserscriptRunner = _POSIXUserscriptRunner
-elif os.name == 'nt':
+elif os.name == 'nt':  # pragma: no cover
     UserscriptRunner = _WindowsUserscriptRunner
-else:
+else:  # pragma: no cover
     UserscriptRunner = _DummyUserscriptRunner
 
 

@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -47,7 +47,8 @@ class FakeDNS:
     FakeDNSAnswer = collections.namedtuple('FakeDNSAnswer', ['error'])
 
     def __init__(self):
-        self.reset()
+        self.used = False
+        self.answer = None
 
     def __repr__(self):
         return utils.get_repr(self, used=self.used, answer=self.answer)
@@ -97,6 +98,7 @@ def urlutils_config_stub(config_stub, monkeypatch):
         'general': {'auto-search': True},
         'searchengines': {
             'test': 'http://www.qutebrowser.org/?q={}',
+            'test-with-dash': 'http://www.example.org/?q={}',
             'DEFAULT': 'http://www.example.com/?q={}',
         },
     }
@@ -164,13 +166,17 @@ class TestFuzzyUrl:
         assert not os_mock.path.exists.called
         assert url == QUrl('http://foo')
 
-    def test_file_absolute(self, os_mock):
+    @pytest.mark.parametrize('path, expected', [
+        ('/foo', QUrl('file:///foo')),
+        ('/bar\n', QUrl('file:///bar')),
+    ])
+    def test_file_absolute(self, path, expected, os_mock):
         """Test with an absolute path."""
         os_mock.path.exists.return_value = True
         os_mock.path.isabs.return_value = True
 
-        url = urlutils.fuzzy_url('/foo')
-        assert url == QUrl('file:///foo')
+        url = urlutils.fuzzy_url(path)
+        assert url == expected
 
     @pytest.mark.posix
     def test_file_absolute_expanded(self, os_mock):
@@ -246,6 +252,8 @@ def test_special_urls(url, special):
     ('test testfoo ', 'www.qutebrowser.org', 'q=testfoo'),
     ('!python testfoo', 'www.example.com', 'q=%21python testfoo'),
     ('blub testfoo', 'www.example.com', 'q=blub testfoo'),
+    ('stripped ', 'www.example.com', 'q=stripped'),
+    ('test-with-dash testfoo', 'www.example.org', 'q=testfoo'),
 ])
 def test_get_search_url(urlutils_config_stub, url, host, query):
     """Test _get_search_url().
@@ -258,6 +266,12 @@ def test_get_search_url(urlutils_config_stub, url, host, query):
     url = urlutils._get_search_url(url)
     assert url.host() == host
     assert url.query() == query
+
+
+@pytest.mark.parametrize('url', ['\n', ' ', '\n '])
+def test_get_search_url_invalid(urlutils_config_stub, url):
+    with pytest.raises(ValueError):
+        urlutils._get_search_url(url)
 
 
 @pytest.mark.parametrize('is_url, is_url_no_autosearch, uses_dns, url', [
@@ -280,7 +294,7 @@ def test_get_search_url(urlutils_config_stub, url, host, query):
     # _has_explicit_scheme False, special_url True
     (True, True, False, 'qute::foo'),
     # Invalid URLs
-    (False, True, False, ''),
+    (False, False, False, ''),
     (False, True, False, 'http:foo:0'),
     # Not URLs
     (False, True, False, 'foo bar'),  # no DNS because of space
@@ -526,6 +540,19 @@ def test_same_domain_invalid_url(url1, url2):
     """Test same_domain with invalid URLs."""
     with pytest.raises(urlutils.InvalidUrlError):
         urlutils.same_domain(QUrl(url1), QUrl(url2))
+
+
+@pytest.mark.parametrize('url, expected', [
+    ('http://example.com', 'http://example.com'),
+    ('http://ünicode.com', 'http://xn--nicode-2ya.com'),
+    ('http://foo.bar/?header=text/pläin',
+     'http://foo.bar/?header=text/pl%C3%A4in'),
+])
+def test_encoded_url(url, expected):
+    """Test encoded_url"""
+    url = QUrl(url)
+    assert urlutils.encoded_url(url) == expected
+
 
 class TestIncDecNumber:
 

@@ -14,17 +14,46 @@ This project adheres to http://semver.org/[Semantic Versioning].
 // `Fixed` for any bug fixes.
 // `Security` to invite users to upgrade in case of vulnerabilities.
 
-v0.5.0 (unreleased)
+v0.6.0 (unreleased)
 -------------------
 
 Added
 ~~~~~
 
+- New `--quiet` argument for the `:debug-pyeval` command to not open a tab with
+  the results. Note `:debug-pyeval` is still only intended for debugging.
+
+Changed
+~~~~~~~
+
+- Pasting multiple lines via `:paste` now opens each line in a new tab.
+
+v0.5.1
+------
+
+Fixed
+~~~~~
+
+- Fixed completion for various config values when using `:set`.
+- Fixed config validation for various config values.
+- Prevented an error being logged when a website with HTTP authentication was
+  opened on Windows.
+
+v0.5.0
+------
+
+Added
+~~~~~
+
+- Ability to preview PDFs using pdf.js in the browser if it's installed. This
+  is disabled by default and can be enabled using the
+  `content -> pdfjs-enabled` setting.
 - New setting `ui -> hide-wayland-decoration` to hide the window decoration
   when using wayland.
 - New userscripts in `misc/userscripts`:
     - `open_download` to easily open a file in your downloads folder.
     - `view_in_mpv` to open a video in mpv and remove it from the page.
+    - `qutedmenu` and `dmenu_qutebrowser` to select URLs via dmenu
 - New setting `content -> host-blocking-whitelist` to whitelist certain domains
   from the adblocker.
 - `{scroll_pos}` can now be used in `ui -> window-title-format` and
@@ -50,6 +79,12 @@ Added
 - New command `:download-clear` which replaces `:download-remove --all`.
 - `:set-cmd-text` has a new `--append` argument to append to the current
   statusbar text.
+- qutebrowser now uses `~/.netrc` if available to authenticate via HTTP.
+- New `:fake-key` command to send a fake keypress to a website or to
+  qutebrowser.
+- New `--mhtml` argument for `:download` to download a page including all
+  ressources as MHTML file.
+- New option `tabs -> title-alignment` to change the alignment of tab titles.
 
 Changed
 ~~~~~~~
@@ -68,16 +103,40 @@ Changed
   finished. When set to `-1`, downloads are never removed.
 - The `:follow-hint` command now optionally takes the keystring of a hint to
   follow.
+- `:scroll-px` now doesn't take floats anymore, which made little sense.
+- Updated the user agent list for the `:set network user-agent` completion.
+- Starting with `--debug` doesn't log `VDEBUG` messages anymore (add
+  `--loglevel VDEBUG` to get them).
+- `:debug-console` now hides the console if it's already shown.
+- `:yank-selected` now doesn't log the selected text anymore.
+- `general -> log-javascript-console` got changed from a boolean to an option
+  taking a loglevel (`none`, `info`, `debug`).
+- `:tab-move +/-` now wraps around if `tabs -> wrap` is `true`.
+- When a subprocess (like launched by `:spawn`) fails, its stdout/stderr is now
+  logged to the console.
+- A search engine name can now contain any non-space character, like dashes.
 
 Deprecated
 ~~~~~~~~~~
 
 - `:download-remove --all` is now deprecated and `:download-clear` should be
   used instead.
+- `:download <url> <destination>` is now deprecated and
+  `:download --dest <destination> <url>` should be used instead.
+
+Removed
+~~~~~~~
+
+- `:scroll` with two pixel-arguments (deprecated in v0.3.0)
+- The `:run-userscript` command (deprecated in v0.2.0)
+- The `rapid` and `rapid-win` targets for `:hint` (deprecated in v0.2.0)
+- The `:cancel-download` command (deprecated in v0.2.0)
+- The `:download-page` command (deprecated in v0.2.0)
 
 Fixed
 ~~~~~
 
+- Fixed retrying of downloads which were started in a now closed tab.
 - Fixed displaying of web history if `web-history-max-items` is set to -1.
 - Cloned tabs now don't display favicons anymore if show-favicons is False.
 - Fixed a crash when clicking a bookmark name and pressing `Ctrl-D`.
@@ -86,6 +145,16 @@ Fixed
   `storage -> prompt-download-directory` was unset.
 - Fixed crash when using `:follow-hint` outside of hint mode.
 - Fixed crash when using `:set foo bar?` with invalid section/option.
+- Fixed scrolling to the very left/right with `:scroll-perc`.
+- Using an external editor should now work correctly with some funny chars
+  (U+2028/U+2029/BOM).
+- Movements in caret mode now should work correctly on OS X and Windows.
+- Fixed upgrade from earlier config versions.
+- Fixed crash when killing a running userscript.
+- Fixed characters being passed through when shifted with
+  `forward-unbound-keys` set to `auto`.
+- Fixed restarting after a crash is reported.
+- Removed `.pyc` files accidentally contained in source releases.
 
 v0.4.1
 ------

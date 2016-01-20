@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -587,6 +587,11 @@ class TestJavascriptEscape:
         '☃': '☃',
         '\x80Ā': '\x80Ā',
         '𐀀\x00𐀀\x00': r'𐀀\x00𐀀\x00',
+        '𐀀\ufeff': r'𐀀\ufeff',
+        '\ufeff': r'\ufeff',
+        # http://stackoverflow.com/questions/2965293/
+        '\u2028': r'\u2028',
+        '\u2029': r'\u2029',
     }
 
     # Once there was this warning here:
@@ -623,8 +628,9 @@ class TestJavascriptEscape:
         with open(path, encoding='utf-8') as f:
             html_source = f.read().replace('%INPUT%', escaped)
 
-        with qtbot.waitSignal(webframe.loadFinished, raising=True):
+        with qtbot.waitSignal(webframe.loadFinished) as blocker:
             webframe.setHtml(html_source)
+        assert blocker.args == [True]
 
         result = webframe.evaluateJavaScript('window.qute_test_result')
         assert result is not None

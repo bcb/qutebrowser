@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -159,7 +159,7 @@ class WebView(QWebView):
         return page
 
     def __repr__(self):
-        url = utils.elide(self.url().toDisplayString(), 100)
+        url = utils.elide(self.url().toDisplayString(QUrl.EncodeUnicode), 100)
         return utils.get_repr(self, tab_id=self.tab_id, url=url)
 
     def __del__(self):
@@ -530,8 +530,8 @@ class WebView(QWebView):
                                     "match for: {}".format(text),
                                     immediately=True)
             else:
-                message.error(self.win_id, "Text '{}' not found on "
-                              "page!".format(text), immediately=True)
+                message.warning(self.win_id, "Text '{}' not found on "
+                                "page!".format(text), immediately=True)
         else:
             def check_scroll_pos():
                 """Check if the scroll position got smaller and show info."""

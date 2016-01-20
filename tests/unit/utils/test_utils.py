@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -26,6 +26,7 @@ import os.path
 import io
 import logging
 import functools
+import collections
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
@@ -68,7 +69,7 @@ class TestCompactText:
         (5, 'foobar', 'foob' + ELLIPSIS),
         (5, 'foo\nbar', 'foob' + ELLIPSIS),
         (7, 'foo\nbar', 'foobar'),
-    ], ids=lambda val: str(val)[:20])
+    ], ids=lambda val: repr(val)[:20])
     def test_eliding(self, elidelength, text, expected):
         """Test eliding."""
         assert utils.compact_text(text, elidelength) == expected
@@ -259,56 +260,62 @@ class TestInterpolateColor:
         white: The Color black as a valid Color for tests.
     """
 
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.white = Color('white')
-        self.black = Color('black')
+    Colors = collections.namedtuple('Colors', ['white', 'black'])
 
-    def test_invalid_start(self):
+    @pytest.fixture
+    def colors(self):
+        """Example colors to be used."""
+        return self.Colors(Color('white'), Color('black'))
+
+    def test_invalid_start(self, colors):
         """Test an invalid start color."""
         with pytest.raises(qtutils.QtValueError):
-            utils.interpolate_color(Color(), self.white, 0)
+            utils.interpolate_color(Color(), colors.white, 0)
 
-    def test_invalid_end(self):
+    def test_invalid_end(self, colors):
         """Test an invalid end color."""
         with pytest.raises(qtutils.QtValueError):
-            utils.interpolate_color(self.white, Color(), 0)
+            utils.interpolate_color(colors.white, Color(), 0)
 
-    def test_invalid_percentage(self):
+    def test_invalid_percentage(self, colors):
         """Test an invalid percentage."""
         with pytest.raises(ValueError):
-            utils.interpolate_color(self.white, self.white, -1)
+            utils.interpolate_color(colors.white, colors.white, -1)
         with pytest.raises(ValueError):
-            utils.interpolate_color(self.white, self.white, 101)
+            utils.interpolate_color(colors.white, colors.white, 101)
 
-    def test_invalid_colorspace(self):
+    def test_invalid_colorspace(self, colors):
         """Test an invalid colorspace."""
         with pytest.raises(ValueError):
-            utils.interpolate_color(self.white, self.black, 10, QColor.Cmyk)
+            utils.interpolate_color(colors.white, colors.black, 10,
+                                    QColor.Cmyk)
 
-    def test_valid_percentages_rgb(self):
+    def test_valid_percentages_rgb(self, colors):
         """Test 0% and 100% in the RGB colorspace."""
-        white = utils.interpolate_color(self.white, self.black, 0, QColor.Rgb)
-        black = utils.interpolate_color(self.white, self.black, 100,
+        white = utils.interpolate_color(colors.white, colors.black, 0,
                                         QColor.Rgb)
-        assert Color(white) == self.white
-        assert Color(black) == self.black
+        black = utils.interpolate_color(colors.white, colors.black, 100,
+                                        QColor.Rgb)
+        assert Color(white) == colors.white
+        assert Color(black) == colors.black
 
-    def test_valid_percentages_hsv(self):
+    def test_valid_percentages_hsv(self, colors):
         """Test 0% and 100% in the HSV colorspace."""
-        white = utils.interpolate_color(self.white, self.black, 0, QColor.Hsv)
-        black = utils.interpolate_color(self.white, self.black, 100,
+        white = utils.interpolate_color(colors.white, colors.black, 0,
                                         QColor.Hsv)
-        assert Color(white) == self.white
-        assert Color(black) == self.black
+        black = utils.interpolate_color(colors.white, colors.black, 100,
+                                        QColor.Hsv)
+        assert Color(white) == colors.white
+        assert Color(black) == colors.black
 
-    def test_valid_percentages_hsl(self):
+    def test_valid_percentages_hsl(self, colors):
         """Test 0% and 100% in the HSL colorspace."""
-        white = utils.interpolate_color(self.white, self.black, 0, QColor.Hsl)
-        black = utils.interpolate_color(self.white, self.black, 100,
+        white = utils.interpolate_color(colors.white, colors.black, 0,
                                         QColor.Hsl)
-        assert Color(white) == self.white
-        assert Color(black) == self.black
+        black = utils.interpolate_color(colors.white, colors.black, 100,
+                                        QColor.Hsl)
+        assert Color(white) == colors.white
+        assert Color(black) == colors.black
 
     def test_interpolation_rgb(self):
         """Test an interpolation in the RGB colorspace."""
@@ -427,8 +434,7 @@ class TestFormatSize:
 
 class TestKeyToString:
 
-    KEYS = [(k, v) for k, v in sorted(vars(Qt).items())
-            if isinstance(v, Qt.Key)]
+    """Test key_to_string."""
 
     @pytest.mark.parametrize('key, expected', [
         (Qt.Key_Blue, 'Blue'),
@@ -449,13 +455,15 @@ class TestKeyToString:
         # want to know if the mapping still behaves properly.
         assert utils.key_to_string(Qt.Key_A) == 'A'
 
-    @pytest.mark.parametrize('key', [e[1] for e in KEYS],
-                             ids=[e[0] for e in KEYS])
-    def test_all(self, key):
+    def test_all(self):
         """Make sure there's some sensible output for all keys."""
-        string = utils.key_to_string(key)
-        assert string
-        string.encode('utf-8')  # make sure it's encodable
+        for name, value in sorted(vars(Qt).items()):
+            if not isinstance(value, Qt.Key):
+                continue
+            print(name)
+            string = utils.key_to_string(value)
+            assert string
+            string.encode('utf-8')  # make sure it's encodable
 
 
 class TestKeyEventToString:
@@ -497,6 +505,46 @@ class TestKeyEventToString:
         monkeypatch.setattr('sys.platform', 'darwin')
         evt = fake_keyevent_factory(key=Qt.Key_A, modifiers=Qt.ControlModifier)
         assert utils.keyevent_to_string(evt) == 'Meta+A'
+
+
+@pytest.mark.parametrize('keystr, expected', [
+    ('<Control-x>', utils.KeyInfo(Qt.Key_X, Qt.ControlModifier, '')),
+    ('<Meta-x>', utils.KeyInfo(Qt.Key_X, Qt.MetaModifier, '')),
+    ('<Ctrl-Alt-y>',
+        utils.KeyInfo(Qt.Key_Y, Qt.ControlModifier | Qt.AltModifier, '')),
+    ('x', utils.KeyInfo(Qt.Key_X, Qt.NoModifier, 'x')),
+    ('X', utils.KeyInfo(Qt.Key_X, Qt.ShiftModifier, 'X')),
+    ('<Escape>', utils.KeyInfo(Qt.Key_Escape, Qt.NoModifier, '')),
+
+    ('foobar', utils.KeyParseError),
+    ('x, y', utils.KeyParseError),
+    ('xyz', utils.KeyParseError),
+    ('Escape', utils.KeyParseError),
+    ('<Ctrl-x>, <Ctrl-y>', utils.KeyParseError),
+])
+def test_parse_single_key(keystr, expected):
+    if expected is utils.KeyParseError:
+        with pytest.raises(utils.KeyParseError):
+            utils._parse_single_key(keystr)
+    else:
+        assert utils._parse_single_key(keystr) == expected
+
+
+
+@pytest.mark.parametrize('keystr, expected', [
+    ('<Control-x>', [utils.KeyInfo(Qt.Key_X, Qt.ControlModifier, '')]),
+    ('x', [utils.KeyInfo(Qt.Key_X, Qt.NoModifier, 'x')]),
+    ('xy', [utils.KeyInfo(Qt.Key_X, Qt.NoModifier, 'x'),
+            utils.KeyInfo(Qt.Key_Y, Qt.NoModifier, 'y')]),
+
+    ('<Control-x><Meta-x>', utils.KeyParseError),
+])
+def test_parse_keystring(keystr, expected):
+    if expected is utils.KeyParseError:
+        with pytest.raises(utils.KeyParseError):
+            utils.parse_keystring(keystr)
+    else:
+        assert utils.parse_keystring(keystr) == expected
 
 
 @pytest.mark.parametrize('orig, repl', [
@@ -837,6 +885,20 @@ class TestRaises:
 ])
 def test_force_encoding(inp, enc, expected):
     assert utils.force_encoding(inp, enc) == expected
+
+
+@pytest.mark.parametrize('inp, expected', [
+    ('normal.txt', 'normal.txt'),
+    ('user/repo issues.mht', 'user_repo issues.mht'),
+    ('<Test\\File> - "*?:|', '_Test_File_ - _____'),
+])
+def test_sanitize_filename(inp, expected):
+    assert utils.sanitize_filename(inp) == expected
+
+
+def test_sanitize_filename_empty_replacement():
+    name = '/<Bad File>/'
+    assert utils.sanitize_filename(name, replacement=None) == 'Bad File'
 
 
 class TestNewestSlice:

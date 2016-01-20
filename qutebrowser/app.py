@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -42,7 +42,7 @@ except ImportError:
     hunter = None
 
 import qutebrowser
-import qutebrowser.resources  # pylint: disable=unused-import
+import qutebrowser.resources
 from qutebrowser.completion.models import instances as completionmodels
 from qutebrowser.commands import cmdutils, runners, cmdexc
 from qutebrowser.config import style, config, websettings, configexc
@@ -61,7 +61,6 @@ qApp = None
 
 def run(args):
     """Initialize everything and run the application."""
-    # pylint: disable=too-many-statements
     if args.version:
         print(version.version(short=True))
         print()
@@ -551,6 +550,10 @@ class Quitter:
         else:
             argdict['session'] = session
             argdict['override_restore'] = False
+        # Ensure :restart works with --temp-basedir
+        argdict['temp_basedir'] = False
+        argdict['temp_basedir_restarted'] = True
+
         # Dump the data
         data = json.dumps(argdict)
         args += ['--json-args', data]
@@ -573,7 +576,7 @@ class Quitter:
             raise cmdexc.CommandError("SyntaxError in {}:{}: {}".format(
                 e.filename, e.lineno, e))
         if ok:
-            self.shutdown()
+            self.shutdown(restart=True)
 
     def restart(self, pages=(), session=None):
         """Inner logic to restart qutebrowser.
@@ -616,7 +619,8 @@ class Quitter:
 
     @cmdutils.register(instance='quitter', name=['quit', 'q'],
                        ignore_args=True)
-    def shutdown(self, status=0, session=None, last_window=False):
+    def shutdown(self, status=0, session=None, last_window=False,
+                 restart=False):
         """Quit qutebrowser.
 
         Args:
@@ -624,6 +628,7 @@ class Quitter:
             session: A session name if saving should be forced.
             last_window: If the shutdown was triggered due to the last window
                             closing.
+            restart: If we're planning to restart.
         """
         if self._shutting_down:
             return
@@ -653,13 +658,14 @@ class Quitter:
             # in the real main event loop, or we'll get a segfault.
             log.destroy.debug("Deferring real shutdown because question was "
                               "active.")
-            QTimer.singleShot(0, functools.partial(self._shutdown, status))
+            QTimer.singleShot(0, functools.partial(self._shutdown, status,
+                                                   restart=restart))
         else:
             # If we have no questions to shut down, we are already in the real
             # event loop, so we can shut down immediately.
-            self._shutdown(status)
+            self._shutdown(status, restart=restart)
 
-    def _shutdown(self, status):
+    def _shutdown(self, status, restart):
         """Second stage of shutdown."""
         log.destroy.debug("Stage 2 of shutting down...")
         if qApp is None:
@@ -692,14 +698,18 @@ class Quitter:
                     error.handle_fatal_exc(
                         e, self._args, "Error while saving!",
                         pre_text="Error while saving {}".format(key))
-        # Disable favicons so removing tempdir will work
-        QWebSettings.setIconDatabasePath("")
+        # Disable storage so removing tempdir will work
+        QWebSettings.setIconDatabasePath('')
+        QWebSettings.setOfflineWebApplicationCachePath('')
+        QWebSettings.globalSettings().setLocalStoragePath('')
         # Re-enable faulthandler to stdout, then remove crash log
         log.destroy.debug("Deactivating crash log...")
         objreg.get('crash-handler').destroy_crashlogfile()
         # Delete temp basedir
-        if self._args.temp_basedir:
-            atexit.register(shutil.rmtree, self._args.basedir)
+        if ((self._args.temp_basedir or self._args.temp_basedir_restarted) and
+                not restart):
+            atexit.register(shutil.rmtree, self._args.basedir,
+                            ignore_errors=True)
         # If we don't kill our custom handler here we might get segfaults
         log.destroy.debug("Deactivating message handler...")
         qInstallMessageHandler(None)
@@ -746,6 +756,12 @@ class Application(QApplication):
         objreg.register('app', self)
 
         self.launch_time = datetime.datetime.now()
+        self.focusObjectChanged.connect(self.on_focus_object_changed)
+
+    @pyqtSlot(QObject)
+    def on_focus_object_changed(self, obj):
+        """Log when the focus object changed."""
+        log.misc.debug("Focus object changed: {!r}".format(obj))
 
     def __repr__(self):
         return utils.get_repr(self)

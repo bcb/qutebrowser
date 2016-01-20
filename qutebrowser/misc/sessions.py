@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -20,6 +20,7 @@
 """Management of sessions - saved tabs/windows."""
 
 import os
+import sip
 import os.path
 
 from PyQt5.QtCore import pyqtSignal, QUrl, QObject, QPoint, QTimer
@@ -176,6 +177,11 @@ class SessionManager(QObject):
                                         window=win_id)
             main_window = objreg.get('main-window', scope='window',
                                      window=win_id)
+
+            # We could be in the middle of destroying a window here
+            if sip.isdeleted(main_window):
+                continue
+
             win_data = {}
             active_window = QApplication.instance().activeWindow()
             if getattr(active_window, 'win_id', None) == win_id:

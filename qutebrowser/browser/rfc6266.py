@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -286,7 +286,7 @@ def normalize_ws(text):
 
 def parse_headers(content_disposition):
     """Build a _ContentDisposition from header values."""
-    # https://bitbucket.org/logilab/pylint/issue/492/
+    # WORKAROUND for https://bitbucket.org/logilab/pylint/issue/492/
     # pylint: disable=no-member
 
     # We allow non-ascii here (it will only be parsed inside of qdtext, and

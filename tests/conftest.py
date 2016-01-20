@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -17,9 +17,9 @@
 # You should have received a copy of the GNU General Public License
 # along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-# pylint: disable=unused-import,import-error
+# pylint: disable=unused-import
 
-"""The qutebrowser test suite contest file."""
+"""The qutebrowser test suite conftest file."""
 
 import os
 import sys
@@ -30,6 +30,7 @@ import textwrap
 import warnings
 
 import pytest
+import hypothesis
 
 import helpers.stubs as stubsmod
 from helpers import logfail
@@ -38,8 +39,16 @@ from helpers.messagemock import message_mock
 from qutebrowser.config import config
 from qutebrowser.utils import objreg
 
+from PyQt5.QtCore import QEvent, QSize, Qt, PYQT_VERSION
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout
 from PyQt5.QtNetwork import QNetworkCookieJar
 import xvfbwrapper
+
+
+# Set hypothesis settings
+hypothesis.settings.register_profile('default',
+                                     hypothesis.settings(strict=True))
+hypothesis.settings.load_profile('default')
 
 
 def _apply_platform_markers(item):
@@ -54,6 +63,11 @@ def _apply_platform_markers(item):
             "Can't be run when frozen"),
         ('frozen', not getattr(sys, 'frozen', False),
             "Can only run when frozen"),
+        ('not_xvfb', item.config.xvfb_display is not None,
+            "Can't be run with Xvfb."),
+        ('skip', True, "Always skipped."),
+        ('pyqt531_or_newer', PYQT_VERSION < 0x050301,
+            "Needs PyQt 5.3.1 or newer"),
     ]
 
     for searched_marker, condition, default_reason in markers:
@@ -100,7 +114,7 @@ def pytest_collection_modifyitems(items):
             item.add_marker('gui')
             if sys.platform == 'linux' and not os.environ.get('DISPLAY', ''):
                 if ('CI' in os.environ and
-                        not os.environ.get('QUTE_NO_DISPLAY_OK', '')):
+                        not os.environ.get('QUTE_NO_DISPLAY', '')):
                     raise Exception("No display available on CI!")
                 skip_marker = pytest.mark.skipif(
                     True, reason="No DISPLAY available")
@@ -116,6 +130,8 @@ def pytest_collection_modifyitems(items):
                 item.add_marker(pytest.mark.integration)
 
         _apply_platform_markers(item)
+        if item.get_marker('xfail_norun'):
+            item.add_marker(pytest.mark.xfail(run=False))
 
 
 def pytest_ignore_collect(path):
@@ -153,6 +169,41 @@ class WinRegistryHelper:
             del objreg.window_registry[win_id]
 
 
+class FakeStatusBar(QWidget):
+
+    """Fake statusbar to test progressbar sizing."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.hbox = QHBoxLayout(self)
+        self.hbox.addStretch()
+        self.hbox.setContentsMargins(0, 0, 0, 0)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet('background-color: red;')
+
+    def minimumSizeHint(self):
+        return QSize(1, self.fontMetrics().height())
+
+
+@pytest.fixture
+def fake_statusbar(qtbot):
+    """Fixture providing a statusbar in a container window."""
+    container = QWidget()
+    qtbot.add_widget(container)
+    vbox = QVBoxLayout(container)
+    vbox.addStretch()
+
+    statusbar = FakeStatusBar(container)
+    # to make sure container isn't GCed
+    # pylint: disable=attribute-defined-outside-init
+    statusbar.container = container
+    vbox.addWidget(statusbar)
+
+    container.show()
+    qtbot.waitForWindowShown(container)
+    return statusbar
+
+
 @pytest.yield_fixture
 def win_registry():
     """Fixture providing a window registry for win_id 0 and 1."""
@@ -182,8 +233,8 @@ def _generate_cmdline_tests():
     for item in valid:
         yield TestCase(''.join(item), True)
     # Invalid command only -> invalid
-    for item in valid:
-        yield TestCase(''.join(item), True)
+    for item in invalid:
+        yield TestCase(''.join(item), False)
     # Invalid command combined with invalid command -> invalid
     for item in itertools.product(invalid, separators, invalid):
         yield TestCase(''.join(item), False)
@@ -201,11 +252,11 @@ def _generate_cmdline_tests():
         yield TestCase(''.join(item), True)
 
 
-@pytest.fixture(params=_generate_cmdline_tests())
+@pytest.fixture(params=_generate_cmdline_tests(), ids=lambda e: e.cmd)
 def cmdline_test(request):
     """Fixture which generates tests for things validating commandlines."""
     # Import qutebrowser.app so all cmdutils.register decorators get run.
-    import qutebrowser.app  # pylint: disable=unused-variable
+    import qutebrowser.app
     return request.param
 
 
@@ -308,12 +359,13 @@ def fake_keyevent_factory():
     from unittest import mock
     from PyQt5.QtGui import QKeyEvent
 
-    def fake_keyevent(key, modifiers=0, text=''):
+    def fake_keyevent(key, modifiers=0, text='', typ=QEvent.KeyPress):
         """Generate a new fake QKeyPressEvent."""
         evtmock = mock.create_autospec(QKeyEvent, instance=True)
         evtmock.key.return_value = key
         evtmock.modifiers.return_value = modifiers
         evtmock.text.return_value = text
+        evtmock.type.return_value = typ
         return evtmock
 
     return fake_keyevent
@@ -334,6 +386,8 @@ def cookiejar_and_cache(stubs):
 @pytest.fixture
 def py_proc():
     """Get a python executable and args list which executes the given code."""
+    if getattr(sys, 'frozen', False):
+        pytest.skip("Can't be run when frozen")
     def func(code):
         return (sys.executable, ['-c', textwrap.dedent(code.strip('\n'))])
     return func
@@ -342,10 +396,6 @@ def py_proc():
 @pytest.yield_fixture(autouse=True)
 def fail_tests_on_warnings():
     warnings.simplefilter('error')
-    # https://github.com/pytest-dev/pytest-bdd/issues/153
-    warnings.filterwarnings('ignore', message=r'inspect.getargspec\(\) is '
-                            r'deprecated, use inspect.signature\(\) instead',
-                            category=DeprecationWarning)
     yield
     warnings.resetwarnings()
 
@@ -353,6 +403,8 @@ def fail_tests_on_warnings():
 def pytest_addoption(parser):
     parser.addoption('--no-xvfb', action='store_true', default=False,
                      help='Disable xvfb in tests.')
+    parser.addoption('--qute-delay', action='store', default=0, type=int,
+                     help="Delay between qutebrowser commands.")
 
 
 def pytest_configure(config):
@@ -364,7 +416,10 @@ def pytest_configure(config):
     if os.environ.get('DISPLAY', None) == '':
         # xvfbwrapper doesn't handle DISPLAY="" correctly
         del os.environ['DISPLAY']
-    if sys.platform.startswith('linux') and not config.getoption('--no-xvfb'):
+
+    if (sys.platform.startswith('linux') and
+            not config.getoption('--no-xvfb') and
+            'QUTE_NO_DISPLAY' not in os.environ):
         assert 'QUTE_BUILDBOT' not in os.environ
         try:
             disp = xvfbwrapper.Xvfb(width=800, height=600, colordepth=16)

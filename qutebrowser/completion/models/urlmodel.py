@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -34,6 +34,7 @@ class UrlCompletionModel(base.BaseCompletionModel):
 
     Used for the `open` command."""
 
+    # https://github.com/The-Compiler/qutebrowser/issues/545
     # pylint: disable=abstract-method
 
     URL_COLUMN = 0

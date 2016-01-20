@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -47,20 +47,31 @@ def main():
         for fn in filenames:
             if os.path.splitext(fn)[1] == '.py':
                 files.append(os.path.join(dirpath, fn))
+
     disabled = [
-        'attribute-defined-outside-init',
         'redefined-outer-name',
         'unused-argument',
         'missing-docstring',
         'protected-access',
         # https://bitbucket.org/logilab/pylint/issue/511/
         'undefined-variable',
+        # directories without __init__.py...
+        'import-error',
     ]
+
+    toxinidir = sys.argv[1]
+    pythonpath = os.environ['PYTHONPATH'].split(os.pathsep) + [
+        toxinidir,
+    ]
+
     no_docstring_rgx = ['^__.*__$', '^setup$']
     args = (['--disable={}'.format(','.join(disabled)),
              '--no-docstring-rgx=({})'.format('|'.join(no_docstring_rgx))] +
-            sys.argv[1:] + files)
-    ret = subprocess.call(['pylint'] + args)
+            sys.argv[2:] + files)
+    env = os.environ.copy()
+    env['PYTHONPATH'] = os.pathsep.join(pythonpath)
+
+    ret = subprocess.call(['pylint'] + args, env=env)
     return ret
 
 

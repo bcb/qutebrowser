@@ -20,7 +20,7 @@
 |<<general-site-specific-quirks,site-specific-quirks>>|Enable workarounds for broken sites.
 |<<general-default-encoding,default-encoding>>|Default encoding to use for websites.
 |<<general-new-instance-open-target,new-instance-open-target>>|How to open links in an existing instance if a new one is launched.
-|<<general-log-javascript-console,log-javascript-console>>|Whether to log javascript console messages.
+|<<general-log-javascript-console,log-javascript-console>>|How to log javascript console messages.
 |<<general-save-session,save-session>>|Whether to always save the open pages.
 |<<general-session-default-name,session-default-name>>|The name of the session to save by default, or empty for the last loaded session.
 |<<general-url-incdec-segments,url-incdec-segments>>|The URL segments where `:navigate increment/decrement` will search for a number.
@@ -118,6 +118,7 @@
 |<<tabs-indicator-width,indicator-width>>|Width of the progress indicator (0 to disable).
 |<<tabs-tabs-are-windows,tabs-are-windows>>|Whether to open windows instead of tabs.
 |<<tabs-title-format,title-format>>|The format to use for the tab title. The following placeholders are defined:
+|<<tabs-title-alignment,title-alignment>>|Alignment of the text inside of tabs
 |<<tabs-mousewheel-tab-switching,mousewheel-tab-switching>>|Switch between tabs using the mouse wheel.
 |<<tabs-padding,padding>>|Padding for tabs (top, bottom, left, right).
 |<<tabs-indicator-padding,indicator-padding>>|Padding for indicators (top, bottom, left, right).
@@ -164,6 +165,7 @@
 |<<content-host-block-lists,host-block-lists>>|List of URLs of lists which contain hosts to block.
 |<<content-host-blocking-enabled,host-blocking-enabled>>|Whether host blocking is enabled.
 |<<content-host-blocking-whitelist,host-blocking-whitelist>>|List of domains that should always be loaded, despite being ad-blocked.
+|<<content-enable-pdfjs,enable-pdfjs>>|Enable pdf.js to view PDF files in the browser.
 |==============
 
 .Quick reference for section ``hints''
@@ -439,14 +441,15 @@ Default: +pass:[tab]+
 
 [[general-log-javascript-console]]
 === log-javascript-console
-Whether to log javascript console messages.
+How to log javascript console messages.
 
 Valid values:
 
- * +true+
- * +false+
+ * +none+: Don't log messages.
+ * +debug+: Log messages with debug level.
+ * +info+: Log messages with info level.
 
-Default: +pass:[false]+
+Default: +pass:[debug]+
 
 [[general-save-session]]
 === save-session
@@ -1126,6 +1129,18 @@ The format to use for the tab title. The following placeholders are defined:
 
 Default: +pass:[{index}: {title}]+
 
+[[tabs-title-alignment]]
+=== title-alignment
+Alignment of the text inside of tabs
+
+Valid values:
+
+ * +left+
+ * +right+
+ * +center+
+
+Default: +pass:[left]+
+
 [[tabs-mousewheel-tab-switching]]
 === mousewheel-tab-switching
 Switch between tabs using the mouse wheel.
@@ -1486,6 +1501,19 @@ Domains may contain * and ? wildcards and are otherwise required to exactly matc
 Local domains are always exempt from hostblocking.
 
 Default: +pass:[piwik.org]+
+
+[[content-enable-pdfjs]]
+=== enable-pdfjs
+Enable pdf.js to view PDF files in the browser.
+
+Note that the files can still be downloaded by clicking the download button in the pdf.js viewer.
+
+Valid values:
+
+ * +true+
+ * +false+
+
+Default: +pass:[false]+
 
 == hints
 Hinting settings.

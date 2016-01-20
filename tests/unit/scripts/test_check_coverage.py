@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -166,6 +166,7 @@ def test_tested_unlisted(covtest):
 @pytest.mark.parametrize('args, reason', [
     (['-k', 'foo'], "because -k is given."),
     (['-m', 'foo'], "because -m is given."),
+    (['--lf'], "because --lf is given."),
     (['blah', '-m', 'foo'], "because -m is given."),
     (['tests/foo'], "because there is nothing to check."),
 ])

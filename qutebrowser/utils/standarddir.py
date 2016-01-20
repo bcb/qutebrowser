@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -190,6 +190,9 @@ def _maybe_create(path):
 def init(args):
     """Initialize all standard dirs."""
     global _args
+    if args is not None:
+        # args can be None during tests
+        log.init.debug("Base directory: {}".format(args.basedir))
     _args = args
     _init_cachedir_tag()
 

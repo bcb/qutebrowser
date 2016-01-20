@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -97,7 +97,6 @@ class change_filter:  # pylint: disable=invalid-name
             @pyqtSlot(str, str)
             @functools.wraps(func)
             def wrapper(sectname=None, optname=None):
-                # pylint: disable=missing-docstring
                 if sectname is None and optname is None:
                     # Called directly, not from a config change event.
                     return func()
@@ -111,7 +110,6 @@ class change_filter:  # pylint: disable=invalid-name
             @pyqtSlot(str, str)
             @functools.wraps(func)
             def wrapper(wrapper_self, sectname=None, optname=None):
-                # pylint: disable=missing-docstring
                 if sectname is None and optname is None:
                     # Called directly, not from a config change event.
                     return func(wrapper_self)
@@ -142,15 +140,16 @@ def _init_main_config(parent=None):
         parent: The parent to pass to ConfigManager.
     """
     args = objreg.get('args')
+    config_obj = ConfigManager(parent=parent)
     try:
-        config_obj = ConfigManager(standarddir.config(), 'qutebrowser.conf',
-                                   args.relaxed_config, parent=parent)
+        config_obj.read(standarddir.config(), 'qutebrowser.conf',
+                        relaxed=args.relaxed_config)
     except (configexc.Error, configparser.Error, UnicodeDecodeError) as e:
         log.init.exception(e)
         errstr = "Error while reading config:"
         try:
             errstr += "\n\n{} -> {}:".format(
-                e.section, e.option)  # pylint: disable=no-member
+                e.section, e.option)
         except AttributeError:
             pass
         errstr += "\n"
@@ -338,7 +337,6 @@ class ConfigManager(QObject):
         ('colors', 'tab.indicator.stop'): 'tabs.indicator.stop',
         ('colors', 'tab.indicator.error'): 'tabs.indicator.error',
         ('colors', 'tab.indicator.system'): 'tabs.indicator.system',
-        ('tabs', 'auto-hide'): 'hide-auto',
         ('completion', 'history-length'): 'cmd-history-max-items',
         ('colors', 'downloads.fg'): 'downloads.fg.start',
     }
@@ -348,6 +346,7 @@ class ConfigManager(QObject):
         ('colors', 'completion.item.bg'),
         ('tabs', 'indicator-space'),
         ('tabs', 'hide-auto'),
+        ('tabs', 'auto-hide'),
         ('tabs', 'hide-always'),
     ]
     CHANGED_OPTIONS = {
@@ -356,30 +355,24 @@ class ConfigManager(QObject):
         ('tabs', 'position'): _transform_position,
         ('ui', 'downloads-position'): _transform_position,
         ('ui', 'remove-finished-downloads'):
-            _get_value_transformer({'false': '-1', 'true': '1000'})
+            _get_value_transformer({'false': '-1', 'true': '1000'}),
+        ('general', 'log-javascript-console'):
+            _get_value_transformer({'false': 'none', 'true': 'debug'}),
     }
 
     changed = pyqtSignal(str, str)
     style_changed = pyqtSignal(str, str)
 
-    def __init__(self, configdir, fname, relaxed=False, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self._initialized = False
+        self._configdir = None
+        self._fname = None
         self.sections = configdata.data()
         self._interpolation = configparser.ExtendedInterpolation()
         self._proxies = {}
         for sectname in self.sections:
             self._proxies[sectname] = SectionProxy(self, sectname)
-        self._fname = fname
-        if configdir is None:
-            self._configdir = None
-            self._initialized = True
-        else:
-            self._configdir = configdir
-            parser = ini.ReadConfigParser(configdir, fname)
-            self._from_cp(parser, relaxed)
-            self._initialized = True
-            self._validate_all()
 
     def __getitem__(self, key):
         """Get a section from the config."""
@@ -421,10 +414,7 @@ class ConfigManager(QObject):
         for optname, option in sect.items():
 
             lines.append('#')
-            if option.typ.special:
-                typestr = ''
-            else:
-                typestr = ' ({})'.format(option.typ.__class__.__name__)
+            typestr = ' ({})'.format(option.typ.__class__.__name__)
             lines.append("# {}{}:".format(optname, typestr))
 
             try:
@@ -560,7 +550,8 @@ class ConfigManager(QObject):
 
     def _after_set(self, changed_sect, changed_opt):
         """Clean up caches and emit signals after an option has been set."""
-        self.get.cache_clear()
+        # WORKAROUND for https://bitbucket.org/logilab/pylint/issues/659/
+        self.get.cache_clear()  # pylint: disable=no-member
         self._changed(changed_sect, changed_opt)
         # Options in the same section and ${optname} interpolation.
         for optname, option in self.sections[changed_sect].items():
@@ -572,6 +563,19 @@ class ConfigManager(QObject):
                 if ('${' + changed_sect + ':' + changed_opt + '}' in
                         option.value()):
                     self._changed(sectname, optname)
+
+    def read(self, configdir, fname, relaxed=False):
+        """Read the config from the given directory/file."""
+        self._fname = fname
+        if configdir is None:
+            self._configdir = None
+            self._initialized = True
+        else:
+            self._configdir = configdir
+            parser = ini.ReadConfigParser(configdir, fname)
+            self._from_cp(parser, relaxed)
+            self._initialized = True
+            self._validate_all()
 
     def items(self, sectname, raw=True):
         """Get a list of (optname, value) tuples for a section.
@@ -621,8 +625,9 @@ class ConfigManager(QObject):
         optname = self.optionxform(optname)
         existed = optname in sectdict
         if existed:
-            del sectdict[optname]
-            self.get.cache_clear()
+            sectdict.delete(optname)
+            # WORKAROUND for https://bitbucket.org/logilab/pylint/issues/659/
+            self.get.cache_clear()  # pylint: disable=no-member
         return existed
 
     @functools.lru_cache()

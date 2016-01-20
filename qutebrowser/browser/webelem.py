@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -106,7 +106,6 @@ class WebElementWrapper(collections.abc.MutableMapping):
             method = getattr(self._elem, name)
 
             def _wrapper(meth, *args, **kwargs):
-                # pylint: disable=missing-docstring
                 self._check_vanished()
                 return meth(*args, **kwargs)
 
@@ -308,6 +307,10 @@ def javascript_escape(text):
         ('\n', r'\n'),  # We also need to escape newlines for some reason.
         ('\r', r'\r'),
         ('\x00', r'\x00'),
+        ('\ufeff', r'\ufeff'),
+        # http://stackoverflow.com/questions/2965293/
+        ('\u2028', r'\u2028'),
+        ('\u2029', r'\u2029'),
     )
     for orig, repl in replacements:
         text = text.replace(orig, repl)

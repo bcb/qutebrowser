@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -19,6 +19,7 @@
 
 """Utilities to show various version informations."""
 
+import re
 import sys
 import glob
 import os.path
@@ -34,6 +35,7 @@ from PyQt5.QtWidgets import QApplication
 
 import qutebrowser
 from qutebrowser.utils import log, utils
+from qutebrowser.browser import pdfjs
 
 
 GPL_BOILERPLATE = """
@@ -133,6 +135,7 @@ def _module_versions():
         ('jinja2', ['__version__']),
         ('pygments', ['__version__']),
         ('yaml', ['__version__']),
+        ('cssutils', ['__version__']),
     ])
     for name, attributes in modules.items():
         try:
@@ -167,8 +170,6 @@ def _os_info():
     elif sys.platform == 'win32':
         osver = ', '.join(platform.win32_ver())
     elif sys.platform == 'darwin':
-        # pylint: disable=unpacking-non-sequence
-        # See https://bitbucket.org/logilab/pylint/issue/165/
         release, versioninfo, machine = platform.mac_ver()
         if all(not e for e in versioninfo):
             versioninfo = ''
@@ -182,6 +183,25 @@ def _os_info():
         for (fn, data) in releaseinfo:
             lines += ['', '--- {} ---'.format(fn), data]
     return lines
+
+
+def _pdfjs_version():
+    """Get the pdf.js version.
+
+    Return:
+        A string with the version number.
+    """
+    try:
+        pdfjs_file = pdfjs.get_pdfjs_res('build/pdf.js').decode('utf-8')
+    except pdfjs.PDFJSNotFound:
+        return 'no'
+    else:
+        version_re = re.compile(r"^PDFJS\.version = '([^']+)';$", re.MULTILINE)
+        match = version_re.search(pdfjs_file)
+        if not match:
+            return 'unknown'
+        else:
+            return match.group(1)
 
 
 def version(short=False):
@@ -212,6 +232,7 @@ def version(short=False):
         lines += _module_versions()
 
         lines += [
+            'pdf.js: {}'.format(_pdfjs_version()),
             'Webkit: {}'.format(qWebKitVersion()),
             'Harfbuzz: {}'.format(os.environ.get('QT_HARFBUZZ', 'system')),
             'SSL: {}'.format(QSslSocket.sslLibraryVersionString()),

@@ -1,7 +1,7 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
-# Copyright 2015 Antoni Boucher <bouanto@zoho.com>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2016 Antoni Boucher <bouanto@zoho.com>
 #
 # This file is part of qutebrowser.
 #
@@ -247,11 +247,13 @@ class BookmarkManager(UrlMarkManager):
         bookmarks_directory = os.path.join(standarddir.config(), 'bookmarks')
         if not os.path.isdir(bookmarks_directory):
             os.makedirs(bookmarks_directory)
+
+        bookmarks_subdir = os.path.join('bookmarks', 'urls')
         self._lineparser = lineparser.LineParser(
-            standarddir.config(), 'bookmarks/urls', parent=self)
+            standarddir.config(), bookmarks_subdir, parent=self)
 
     def _init_savemanager(self, save_manager):
-        filename = os.path.join(standarddir.config(), 'bookmarks/urls')
+        filename = os.path.join(standarddir.config(), 'bookmarks', 'urls')
         save_manager.add_saveable('bookmark-manager', self.save, self.changed,
                                   filename=filename)
 

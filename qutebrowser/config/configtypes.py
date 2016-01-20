@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -29,7 +29,7 @@ import collections
 import warnings
 import datetime
 
-from PyQt5.QtCore import QUrl
+from PyQt5.QtCore import QUrl, Qt
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtNetwork import QNetworkProxy
 from PyQt5.QtWidgets import QTabWidget, QTabBar
@@ -117,15 +117,11 @@ class BaseType:
     Class attributes:
         valid_values: Possible values if they can be expressed as a fixed
                       string. ValidValues instance.
-        special: If set, the type is only used for one option and isn't
-                 mentioned in the config file.
     """
-
-    valid_values = None
-    special = False
 
     def __init__(self, none_ok=False):
         self.none_ok = none_ok
+        self.valid_values = None
 
     def _basic_validation(self, value):
         """Do some basic validation for the value (empty, non-printable chars).
@@ -216,11 +212,10 @@ class MappingType(BaseType):
 
     MAPPING = {}
 
-    def __init__(self, none_ok=False):
+    def __init__(self, none_ok=False,
+                 valid_values=None):
         super().__init__(none_ok)
-        if list(sorted(self.MAPPING)) != list(sorted(self.valid_values)):
-            raise ValueError("Mapping {!r} doesn't match valid values "
-                             "{!r}".format(self.MAPPING, self.valid_values))
+        self.valid_values = valid_values
 
     def validate(self, value):
         super().validate(value.lower())
@@ -243,8 +238,10 @@ class String(BaseType):
     """
 
     def __init__(self, minlen=None, maxlen=None, forbidden=None,
-                 none_ok=False, completions=None):
+                 none_ok=False, completions=None, valid_values=None):
         super().__init__(none_ok)
+        self.valid_values = valid_values
+
         if minlen is not None and minlen < 1:
             raise ValueError("minlen ({}) needs to be >= 1!".format(minlen))
         elif maxlen is not None and maxlen < 1:
@@ -261,6 +258,13 @@ class String(BaseType):
         self._basic_validation(value)
         if not value:
             return
+
+        if self.valid_values is not None:
+            if value not in self.valid_values:
+                raise configexc.ValidationError(
+                    value, "valid values: {}".format(', '.join(
+                        self.valid_values)))
+
         if self.forbidden is not None and any(c in value
                                               for c in self.forbidden):
             raise configexc.ValidationError(value, "may not contain the chars "
@@ -273,12 +277,19 @@ class String(BaseType):
                                             "long!".format(self.maxlen))
 
     def complete(self):
-        return self._completions
+        if self._completions is not None:
+            return self._completions
+        else:
+            return super().complete()
 
 
 class List(BaseType):
 
     """Base class for a (string-)list setting."""
+
+    def __init__(self, none_ok=False, valid_values=None):
+        super().__init__(none_ok)
+        self.valid_values = valid_values
 
     def transform(self, value):
         if not value:
@@ -351,7 +362,9 @@ class Bool(BaseType):
 
     """Base class for a boolean setting."""
 
-    valid_values = ValidValues('true', 'false')
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues('true', 'false')
 
     def transform(self, value):
         if not value:
@@ -371,7 +384,9 @@ class BoolAsk(Bool):
 
     """A yes/no/ask question."""
 
-    valid_values = ValidValues('true', 'false', 'ask')
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues('true', 'false', 'ask')
 
     def transform(self, value):
         if value.lower() == 'ask':
@@ -649,11 +664,14 @@ class ColorSystem(MappingType):
 
     """Color systems for interpolation."""
 
-    special = True
-    valid_values = ValidValues(('rgb', "Interpolate in the RGB color system."),
-                               ('hsv', "Interpolate in the HSV color system."),
-                               ('hsl', "Interpolate in the HSL color system."),
-                               ('none', "Don't show a gradient."))
+    def __init__(self, none_ok=False):
+        super().__init__(
+            none_ok,
+            valid_values=ValidValues(
+                ('rgb', "Interpolate in the RGB color system."),
+                ('hsv', "Interpolate in the HSV color system."),
+                ('hsl', "Interpolate in the HSL color system."),
+                ('none', "Don't show a gradient.")))
 
     MAPPING = {
         'rgb': QColor.Rgb,
@@ -1087,29 +1105,21 @@ class ShellCommand(BaseType):
             return shlex.split(value)
 
 
-class HintMode(BaseType):
-
-    """Base class for the hints -> mode setting."""
-
-    special = True
-    valid_values = ValidValues(('number', "Use numeric hints."),
-                               ('letter', "Use the chars in the hints -> "
-                                          "chars setting."))
-
-
 class Proxy(BaseType):
 
     """A proxy URL or special value."""
-
-    special = True
-    valid_values = ValidValues(('system', "Use the system wide proxy."),
-                               ('none', "Don't use any proxy"))
 
     PROXY_TYPES = {
         'http': QNetworkProxy.HttpProxy,
         'socks': QNetworkProxy.Socks5Proxy,
         'socks5': QNetworkProxy.Socks5Proxy,
     }
+
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues(
+            ('system', "Use the system wide proxy."),
+            ('none', "Don't use any proxy"))
 
     def validate(self, value):
         self._basic_validation(value)
@@ -1157,8 +1167,6 @@ class SearchEngineName(BaseType):
 
     """A search engine name."""
 
-    special = True
-
     def validate(self, value):
         self._basic_validation(value)
 
@@ -1166,8 +1174,6 @@ class SearchEngineName(BaseType):
 class SearchEngineUrl(BaseType):
 
     """A search engine URL."""
-
-    special = True
 
     def validate(self, value):
         self._basic_validation(value)
@@ -1260,8 +1266,6 @@ class UserStyleSheet(File):
 
     """QWebSettings UserStyleSheet."""
 
-    special = True
-
     def transform(self, value):
         if not value:
             return None
@@ -1296,14 +1300,13 @@ class AutoSearch(BaseType):
 
     """Whether to start a search when something else than a URL is entered."""
 
-    special = True
-    valid_values = ValidValues(('naive', "Use simple/naive check."),
-                               ('dns', "Use DNS requests (might be slow!)."),
-                               ('false', "Never search automatically."))
-
     def __init__(self, none_ok=False):
         super().__init__(none_ok)
         self.booltype = Bool(none_ok=none_ok)
+        self.valid_values = ValidValues(
+            ('naive', "Use simple/naive check."),
+            ('dns', "Use DNS requests (might be slow!)."),
+            ('false', "Never search automatically."))
 
     def validate(self, value):
         self._basic_validation(value)
@@ -1330,8 +1333,6 @@ class Position(MappingType):
 
     """The position of the tab bar."""
 
-    valid_values = ValidValues('top', 'bottom', 'left', 'right')
-
     MAPPING = {
         'top': QTabWidget.North,
         'bottom': QTabWidget.South,
@@ -1339,12 +1340,35 @@ class Position(MappingType):
         'right': QTabWidget.East,
     }
 
+    def __init__(self, none_ok=False):
+        super().__init__(
+            none_ok,
+            valid_values=ValidValues('top', 'bottom', 'left', 'right'))
+
+
+class TextAlignment(MappingType):
+
+    """Alignment of text."""
+
+    MAPPING = {
+        'left': Qt.AlignLeft,
+        'right': Qt.AlignRight,
+        'center': Qt.AlignCenter,
+    }
+
+    def __init__(self, none_ok=False):
+        super().__init__(
+            none_ok,
+            valid_values=ValidValues('left', 'right', 'center'))
+
 
 class VerticalPosition(BaseType):
 
     """The position of the download bar."""
 
-    valid_values = ValidValues('top', 'bottom')
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues('top', 'bottom')
 
 
 class UrlList(List):
@@ -1376,8 +1400,6 @@ class SessionName(BaseType):
 
     """The name of a session."""
 
-    special = True
-
     def validate(self, value):
         self._basic_validation(value)
         if value.startswith('_'):
@@ -1388,58 +1410,37 @@ class SelectOnRemove(MappingType):
 
     """Which tab to select when the focused tab is removed."""
 
-    special = True
-    valid_values = ValidValues(
-        ('left', "Select the tab on the left."),
-        ('right', "Select the tab on the right."),
-        ('previous', "Select the previously selected tab."))
-
     MAPPING = {
         'left': QTabBar.SelectLeftTab,
         'right': QTabBar.SelectRightTab,
         'previous': QTabBar.SelectPreviousTab,
     }
 
-
-class LastClose(BaseType):
-
-    """Behavior when the last tab is closed."""
-
-    special = True
-    valid_values = ValidValues(('ignore', "Don't do anything."),
-                               ('blank', "Load a blank page."),
-                               ('startpage', "Load the start page."),
-                               ('default-page', "Load the default page."),
-                               ('close', "Close the window."))
-
-
-class AcceptCookies(BaseType):
-
-    """Control which cookies to accept."""
-
-    special = True
-    valid_values = ValidValues(('all', "Accept all cookies."),
-                               ('no-3rdparty', "Accept cookies from the same"
-                                " origin only."),
-                               ('no-unknown-3rdparty', "Accept cookies from "
-                                "the same origin only, unless a cookie is "
-                                "already set for the domain."),
-                               ('never', "Don't accept cookies at all."))
+    def __init__(self, none_ok=False):
+        super().__init__(
+            none_ok,
+            valid_values=ValidValues(
+                ('left', "Select the tab on the left."),
+                ('right', "Select the tab on the right."),
+                ('previous', "Select the previously selected tab.")))
 
 
 class ConfirmQuit(FlagList):
 
     """Whether to display a confirmation when the window is closed."""
 
-    special = True
-    valid_values = ValidValues(('always', "Always show a confirmation."),
-                               ('multiple-tabs', "Show a confirmation if "
-                                                 "multiple tabs are opened."),
-                               ('downloads', "Show a confirmation if "
-                                             "downloads are running"),
-                               ('never', "Never show a confirmation."))
     # Values that can be combined with commas
     combinable_values = ('multiple-tabs', 'downloads')
+
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues(
+            ('always', "Always show a confirmation."),
+            ('multiple-tabs', "Show a confirmation if "
+             "multiple tabs are opened."),
+            ('downloads', "Show a confirmation if "
+             "downloads are running"),
+            ('never', "Never show a confirmation."))
 
     def validate(self, value):
         super().validate(value)
@@ -1457,47 +1458,30 @@ class ConfirmQuit(FlagList):
                 value, "List cannot contain always!")
 
 
-class ForwardUnboundKeys(BaseType):
-
-    """Whether to forward unbound keys."""
-
-    special = True
-    valid_values = ValidValues(('all', "Forward all unbound keys."),
-                               ('auto', "Forward unbound non-alphanumeric "
-                                        "keys."),
-                               ('none', "Don't forward any keys."))
-
-
-class CloseButton(BaseType):
-
-    """Mouse button used to close tabs."""
-
-    special = True
-    valid_values = ValidValues(('right', "Close tabs on right-click."),
-                               ('middle', "Close tabs on middle-click."),
-                               ('none', "Don't close tabs using the mouse."))
-
-
 class NewTabPosition(BaseType):
 
     """How new tabs are positioned."""
 
-    special = True
-    valid_values = ValidValues(('left', "On the left of the current tab."),
-                               ('right', "On the right of the current tab."),
-                               ('first', "At the left end."),
-                               ('last', "At the right end."))
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues(
+            ('left', "On the left of the current tab."),
+            ('right', "On the right of the current tab."),
+            ('first', "At the left end."),
+            ('last', "At the right end."))
 
 
 class IgnoreCase(Bool):
 
     """Whether to ignore case when searching."""
 
-    special = True
-    valid_values = ValidValues(('true', "Search case-insensitively"),
-                               ('false', "Search case-sensitively"),
-                               ('smart', "Search case-sensitively if there "
-                                         "are capital chars"))
+    def __init__(self, none_ok=False):
+        super().__init__(none_ok)
+        self.valid_values = ValidValues(
+            ('true', "Search case-insensitively"),
+            ('false', "Search case-sensitively"),
+            ('smart', "Search case-sensitively if there "
+             "are capital chars"))
 
     def transform(self, value):
         if value.lower() == 'smart':
@@ -1515,103 +1499,48 @@ class IgnoreCase(Bool):
             super().validate(value)
 
 
-class NewInstanceOpenTarget(BaseType):
-
-    """How to open links in an existing instance if a new one is launched."""
-
-    special = True
-    valid_values = ValidValues(('tab', "Open a new tab in the existing "
-                                       "window and activate the window."),
-                               ('tab-bg', "Open a new background tab in the "
-                                          "existing window and activate the "
-                                          "window."),
-                               ('tab-silent', "Open a new tab in the existing "
-                                              "window without activating "
-                                              "the window."),
-                               ('tab-bg-silent', "Open a new background tab "
-                                                 "in the existing window "
-                                                 "without activating the "
-                                                 "window."),
-                               ('window', "Open in a new window."))
-
-
-class DownloadPathSuggestion(BaseType):
-
-    """How to format the question when downloading."""
-
-    special = True
-    valid_values = ValidValues(('path', "Show only the download path."),
-                               ('filename', "Show only download filename."),
-                               ('both', "Show download path and filename."))
-
-
-class Referer(BaseType):
-
-    """Send the Referer header."""
-
-    valid_values = ValidValues(('always', "Always send."),
-                               ('never', "Never send; this is not recommended,"
-                                   " as some sites may break."),
-                               ('same-domain', "Only send for the same domain."
-                                   " This will still protect your privacy, but"
-                                   " shouldn't break any sites."))
-
-
 class UserAgent(BaseType):
 
     """The user agent to use."""
 
-    special = True
-
-    def __init__(self, none_ok=False):
-        super().__init__(none_ok)
-
     def validate(self, value):
         self._basic_validation(value)
 
+    # To update the following list of user agents, run the script 'ua_fetch.py'
+    # Vim-protip: Place your cursor below this comment and run
+    # :r!python scripts/dev/ua_fetch.py
     def complete(self):
         """Complete a list of common user agents."""
         out = [
-            ('Mozilla/5.0 (Windows NT 6.1; WOW64; rv:35.0) Gecko/20100101 '
-             'Firefox/35.0',
-             "Firefox 35.0 Win7 64-bit"),
-            ('Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:35.0) Gecko/20100101 '
-             'Firefox/35.0',
-             "Firefox 35.0 Ubuntu"),
-            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:35.0) '
-             'Gecko/20100101 Firefox/35.0',
-             "Firefox 35.0 MacOSX"),
+            ('Mozilla/5.0 (Windows NT 6.1; WOW64; rv:41.0) Gecko/20100101 '
+             'Firefox/41.0',
+             "Firefox 41.0  Win7 64-bit"),
+            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:41.0) '
+             'Gecko/20100101 Firefox/41.0',
+             "Firefox 41.0  MacOSX"),
+            ('Mozilla/5.0 (X11; Linux x86_64; rv:41.0) Gecko/20100101 '
+             'Firefox/41.0',
+             "Firefox 41.0  Linux"),
 
-            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) '
-             'AppleWebKit/600.3.18 (KHTML, like Gecko) Version/8.0.3 '
-             'Safari/600.3.18',
-             "Safari 8.0 MacOSX"),
+            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) '
+             'AppleWebKit/601.2.7 (KHTML, like Gecko) Version/9.0.1 '
+             'Safari/601.2.7',
+             "Safari Generic  MacOSX"),
+            ('Mozilla/5.0 (iPad; CPU OS 9_1 like Mac OS X) '
+             'AppleWebKit/601.1.46 (KHTML, like Gecko) Version/9.0 '
+             'Mobile/13B143 Safari/601.1',
+             "Mobile Safari Generic  iOS"),
 
             ('Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, '
-             'like Gecko) Chrome/40.0.2214.111 Safari/537.36',
-             "Chrome 40.0 Win7 64-bit"),
-            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) '
-             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.111 '
+             'like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+             "Chrome 46.0  Win7 64-bit"),
+            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) '
+             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 '
              'Safari/537.36',
-             "Chrome 40.0 MacOSX"),
-            ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-             '(KHTML, like Gecko) Chrome/40.0.2214.111 Safari/537.36',
-             "Chrome 40.0 Linux"),
-
-            ('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like '
-             'Gecko',
-             "IE 11.0 Win7 64-bit"),
-
-            ('Mozilla/5.0 (iPhone; CPU iPhone OS 8_1_2 like Mac OS X) '
-             'AppleWebKit/600.1.4 (KHTML, like Gecko) Version/8.0 '
-             'Mobile/12B440 Safari/600.1.4',
-             "Mobile Safari 8.0 iOS"),
-            ('Mozilla/5.0 (Android; Mobile; rv:35.0) Gecko/35.0 Firefox/35.0',
-             "Firefox 35, Android"),
-            ('Mozilla/5.0 (Linux; Android 5.0.2; One Build/KTU84L.H4) '
-             'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 '
-             'Chrome/37.0.0.0 Mobile Safari/537.36',
-             "Android Browser"),
+             "Chrome 46.0  MacOSX"),
+            ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, '
+             'like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+             "Chrome 46.0  Linux"),
 
             ('Mozilla/5.0 (compatible; Googlebot/2.1; '
              '+http://www.google.com/bot.html',
@@ -1619,28 +1548,13 @@ class UserAgent(BaseType):
             ('Wget/1.16.1 (linux-gnu)',
              "wget 1.16.1"),
             ('curl/7.40.0',
-             "curl 7.40.0")
+             "curl 7.40.0"),
+
+            ('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like '
+             'Gecko',
+             "IE 11.0 for Desktop  Win7 64-bit")
         ]
         return out
-
-
-class TabBarShow(BaseType):
-
-    """When to show the tab bar."""
-
-    valid_values = ValidValues(('always', "Always show the tab bar."),
-                               ('never', "Always hide the tab bar."),
-                               ('multiple', "Hide the tab bar if only one tab "
-                                            "is open."),
-                               ('switching', "Show the tab bar when switching "
-                                             "tabs."))
-
-
-class URLSegmentList(FlagList):
-
-    """A list of URL segments."""
-
-    valid_values = ValidValues('host', 'path', 'query', 'anchor')
 
 
 class TimestampTemplate(BaseType):
